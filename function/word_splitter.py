@@ -1,0 +1,198 @@
+"""
+Word 分割逻辑
+
+该模块实现了对 Word 文档（.docx）的各种分割方式，
+包括按字符数分割和按段落数分割。
+"""
+import os
+from docx import Document
+from pathlib import Path
+from .file_handler import FileHandler
+
+
+class WordSplitter:
+    """Word 分割器
+
+    该类提供了对 Word 文档（.docx）进行分割的功能，
+    支持按字符数分割和按段落数分割两种方式。
+    """
+
+    def __init__(self):
+        """初始化 Word 分割器
+
+        创建文件处理器实例，用于处理通用文件操作。
+        """
+        self.file_handler = FileHandler()
+
+    def split_by_chars(self, input_path, chars_per_split, output_dir=None):
+        """
+        按字符数分割 Word 文件
+
+        该方法将 Word 文档的内容提取为文本，然后按照指定的字符数进行分割，
+        最后将每个文本部分保存为新的 Word 文档。
+
+        Args:
+            input_path (str): 输入 Word 文件的完整路径
+            chars_per_split (int): 每个分割文件应包含的字符数
+            output_dir (str, optional): 输出目录路径，默认为输入文件所在目录
+
+        Returns:
+            list: 包含所有成功分割的文件路径的列表
+
+        Raises:
+            FileNotFoundError: 当输入文件不存在时抛出
+            ValueError: 当文件格式不正确或分割规则无效时抛出
+        """
+        # 如果未指定输出目录，则使用输入文件所在目录
+        if output_dir is None:
+            output_dir = str(Path(input_path).parent)
+
+        # 验证输入文件是否存在
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"输入文件不存在: {input_path}")
+
+        # 验证文件是否为有效的 DOCX 格式
+        if not self.file_handler.get_file_type(input_path) == '.docx':
+            raise ValueError(f"文件不是有效的 DOCX 格式: {input_path}")
+
+        # 验证字符数分割规则是否有效
+        if not self.file_handler.validate_split_rule(chars_per_split, '.docx'):
+            raise ValueError(f"无效的字符数分割规则: {chars_per_split}")
+
+        # 读取 Word 文档内容
+        doc = Document(input_path)
+        full_text = []  # 存储提取的文本内容
+
+        # 提取所有段落文本
+        for paragraph in doc.paragraphs:
+            full_text.append(paragraph.text)
+
+        # 提取表格中的文本
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    full_text.append(cell.text)
+
+        # 合并所有文本，用换行符分隔
+        text_content = '\n'.join(full_text)
+
+        # 检查是否需要分割：如果总字符数小于等于分割字符数，则复制整个文件
+        if len(text_content) <= chars_per_split:
+            output_path = self.file_handler.generate_output_filename(
+                input_path, 1, '.docx'
+            )
+            new_doc = Document()
+            for para in doc.paragraphs:
+                new_doc.add_paragraph(para.text)
+            new_doc.save(output_path)
+            return [output_path]
+
+        # 按字符数分割文本内容
+        text_parts = []  # 存储分割后的文本片段
+        for i in range(0, len(text_content), chars_per_split):
+            text_parts.append(text_content[i:i + chars_per_split])
+
+        # 将每个文本部分写入新的 Word 文件
+        output_paths = []  # 存储输出文件路径的列表
+        for idx, text_part in enumerate(text_parts, 1):
+            # 生成输出文件名
+            output_path = self.file_handler.generate_output_filename(
+                input_path, idx, '.docx'
+            )
+
+            # 创建新的 Word 文档并写入内容
+            new_doc = Document()
+
+            # 尝试保持原始文档的样式
+            # 这里简单地将文本按换行符分割成段落
+            paragraphs = text_part.split('\n')
+            for para_text in paragraphs:
+                if para_text.strip():  # 避免添加只有空白字符的空段落
+                    new_doc.add_paragraph(para_text)
+
+            new_doc.save(output_path)
+            output_paths.append(output_path)
+
+        return output_paths
+
+    def split_by_paragraphs(self, input_path, paras_per_split, output_dir=None):
+        """
+        按段落数分割 Word 文件
+
+        该方法将 Word 文档按指定的段落数进行分割，
+        每个分割后的文件包含指定数量的段落。
+
+        Args:
+            input_path (str): 输入 Word 文件的完整路径
+            paras_per_split (int): 每个分割文件应包含的段落数
+            output_dir (str, optional): 输出目录路径，默认为输入文件所在目录
+
+        Returns:
+            list: 包含所有成功分割的文件路径的列表
+
+        Raises:
+            FileNotFoundError: 当输入文件不存在时抛出
+            ValueError: 当文件格式不正确或分割规则无效时抛出
+        """
+        # 如果未指定输出目录，则使用输入文件所在目录
+        if output_dir is None:
+            output_dir = str(Path(input_path).parent)
+
+        # 验证输入文件是否存在
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"输入文件不存在: {input_path}")
+
+        # 验证文件是否为有效的 DOCX 格式
+        if not self.file_handler.get_file_type(input_path) == '.docx':
+            raise ValueError(f"文件不是有效的 DOCX 格式: {input_path}")
+
+        # 验证段落数分割规则是否有效
+        if not self.file_handler.validate_split_rule(paras_per_split, '.docx'):
+            raise ValueError(f"无效的段落数分割规则: {paras_per_split}")
+
+        # 读取 Word 文档的所有段落
+        doc = Document(input_path)
+        all_paragraphs = doc.paragraphs
+
+        # 检查是否需要分割：如果总段落数小于等于分割段落数，则复制整个文件
+        if len(all_paragraphs) <= paras_per_split:
+            output_path = self.file_handler.generate_output_filename(
+                input_path, 1, '.docx'
+            )
+            new_doc = Document()
+            for para in all_paragraphs:
+                new_doc.add_paragraph(para.text)
+            new_doc.save(output_path)
+            return [output_path]
+
+        # 按段落数分割文档
+        output_paths = []  # 存储输出文件路径的列表
+        part_num = 1       # 分割部分的编号
+
+        # 循环处理每个分割部分
+        for start_para in range(0, len(all_paragraphs), paras_per_split):
+            # 计算结束段落索引（不超过总段落数）
+            end_para = min(start_para + paras_per_split, len(all_paragraphs))
+
+            # 生成输出文件名
+            output_path = self.file_handler.generate_output_filename(
+                input_path, part_num, '.docx'
+            )
+
+            # 创建新的 Word 文档并添加当前段落组
+            new_doc = Document()
+
+            # 复制原始文档的样式（简化版）
+            for i in range(start_para, end_para):
+                para = all_paragraphs[i]
+                new_para = new_doc.add_paragraph(para.text)
+
+                # 尝试复制段落的基本格式（简化版）
+                if para.style:
+                    new_para.style = para.style
+
+            new_doc.save(output_path)
+            output_paths.append(output_path)
+            part_num += 1
+
+        return output_paths
