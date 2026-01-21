@@ -10,13 +10,12 @@ from .file_handler import FileHandler
 from .pdf_splitter import PDFSplitter
 from .word_splitter import WordSplitter
 from .txt_splitter import TxtSplitter
-from .document_analyzer import analyze_documents, format_table
+from .document_analyzer import DocumentAnalyzer
 
 __all__ = [
     'FileHandler',
     'PDFSplitter',
     'WordSplitter',
     'TxtSplitter',
-    'analyze_documents',
-    'format_table'
+    'DocumentAnalyzer'
 ]

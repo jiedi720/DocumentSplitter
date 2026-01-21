@@ -28,8 +28,9 @@ class FileSelector(ttk.Frame):
         """
         super().__init__(parent, **kwargs)
 
-        # 创建一个StringVar变量来存储选中的文件路径
+        # 创建一个StringVar变量来存储选中的文件路径（支持多文件）
         self.selected_file_path = tk.StringVar()
+        self.selected_files = []  # 存储选中的文件列表
 
         # 创建界面组件
         self.create_widgets()
@@ -85,16 +86,24 @@ class FileSelector(ttk.Frame):
             ('All files', '*.*')
         )
 
-        # 打开文件对话框
-        filename = filedialog.askopenfilename(
-            title='选择要分割的文件',
+        # 打开文件对话框（支持多文件选择）
+        filenames = filedialog.askopenfilenames(
+            title='选择要分割的文件（可多选）',
             initialdir='/',  # 初始目录
             filetypes=filetypes  # 文件类型过滤器
         )
 
         # 如果用户选择了文件，则更新路径变量
-        if filename:
-            self.selected_file_path.set(filename)
+        if filenames:
+            self.selected_files = list(filenames)
+            # 显示第一个文件路径，但保留所有文件在列表中
+            if len(filenames) == 1:
+                self.selected_file_path.set(filenames[0])
+            else:
+                self.selected_file_path.set(f"已选择 {len(filenames)} 个文件")
+        else:
+            self.selected_files = []
+            self.selected_file_path.set("点击按钮选择文件，或拖拽文件到此处")
 
     def get_selected_file(self):
         """获取选中的文件路径
@@ -103,6 +112,14 @@ class FileSelector(ttk.Frame):
             str: 选中的文件路径，如果没有选择文件则返回空字符串
         """
         return self.selected_file_path.get()
+
+    def get_selected_files(self):
+        """获取选中的所有文件路径
+
+        Returns:
+            list: 选中的文件路径列表
+        """
+        return self.selected_files
 
     def set_selected_file(self, file_path):
         """设置选中的文件路径
@@ -113,6 +130,7 @@ class FileSelector(ttk.Frame):
         Args:
             file_path (str): 要设置的文件路径
         """
+        self.selected_files = [file_path]
         self.selected_file_path.set(file_path)
 
     def setup_drag_and_drop(self):
@@ -207,20 +225,26 @@ class FileSelector(ttk.Frame):
 
         print(f"文件列表: {file_list}")
 
-        # 只处理第一个文件
-        if file_list:
-            file_path = file_list[0].strip()
+        # 处理所有文件
+        valid_files = []
+        unsupported_files = []
 
-            print(f"处理后的文件路径: {file_path}")
+        for file_path in file_list:
+            file_path = file_path.strip()
+
+            if not file_path:
+                continue
+
+            print(f"处理文件路径: {file_path}")
 
             # 尝试规范化路径
             try:
-                # 使用 Path 对象处理路径，这会自动处理各种格式
                 normalized_path = Path(file_path).resolve()
                 file_path = str(normalized_path)
                 print(f"规范化后的路径: {file_path}")
             except Exception as e:
                 print(f"路径规范化失败: {e}")
+                continue
 
             # 验证文件是否存在
             if Path(file_path).exists():
@@ -229,14 +253,10 @@ class FileSelector(ttk.Frame):
                 supported_extensions = ['.pdf', '.docx', '.txt']
 
                 if file_ext in supported_extensions:
-                    self.selected_file_path.set(file_path)
-                    # 触发变量变化事件，通知主窗口
-                    # 注意：trace_vwrite 已被弃用，使用 trace_add 替代
-                    if hasattr(self.selected_file_path, 'trace_add'):
-                        self.selected_file_path.trace_add('write', lambda *args: None)
+                    valid_files.append(file_path)
                 else:
-                    # 不支持的文件类型
-                    self.selected_file_path.set(f"不支持的文件类型：{file_ext}")
+                    unsupported_files.append(file_path)
+                    print(f"不支持的文件类型: {file_path}")
             else:
                 # 文件不存在 - 尝试多种路径格式
                 print(f"文件不存在: {file_path}")
@@ -244,21 +264,29 @@ class FileSelector(ttk.Frame):
                 # 尝试解码可能的URL编码路径
                 import urllib.parse
                 decoded_path = urllib.parse.unquote(file_path)
-                if Path(decoded_path).exists():
-                    print(f"解码后的路径存在: {decoded_path}")
-                    file_ext = Path(decoded_path).suffix.lower()
-                    supported_extensions = ['.pdf', '.docx', '.txt']
-                    if file_ext in supported_extensions:
-                        self.selected_file_path.set(decoded_path)
-                        # 触发变量变化事件，通知主窗口
-                        if hasattr(self.selected_file_path, 'trace_add'):
-                            self.selected_file_path.trace_add('write', lambda *args: None)
-                    else:
-                        # 不支持的文件类型
-                        self.selected_file_path.set(f"不支持的文件类型：{file_ext}")
-                else:
-                    # 最终还是不存在，显示错误信息
-                    self.selected_file_path.set("文件不存在")
+                    if Path(decoded_path).exists():
+                        print(f"解码后的路径存在: {decoded_path}")
+                        file_ext = Path(decoded_path).suffix.lower()
+                        supported_extensions = ['.pdf', '.docx', '.txt']
+                        if file_ext in supported_extensions:
+                            valid_files.append(decoded_path)
+                        else:
+                            unsupported_files.append(decoded_path)
+
+        # 更新文件列表
+        self.selected_files = valid_files
+
+        # 更新显示
+        if len(valid_files) == 0:
+            self.selected_file_path.set("拖拽的文件无效或不支持")
+        elif len(valid_files) == 1:
+            self.selected_file_path.set(valid_files[0])
+        else:
+            self.selected_file_path.set(f"已选择 {len(valid_files)} 个文件")
+
+        # 触发变量变化事件，通知主窗口
+        if hasattr(self.selected_file_path, 'trace_add'):
+            self.selected_file_path.trace_add('write', lambda *args: None)
 
         # 恢复默认样式
         self.drop_frame.config(background="")

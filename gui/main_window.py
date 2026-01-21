@@ -13,6 +13,7 @@ from pathlib import Path
 # 导入GUI组件
 from .file_selector import FileSelector
 from .settings_panel import SettingsPanel
+from .analysis_result_window import AnalysisResultWindow
 
 # 导入功能模块
 import sys
@@ -27,6 +28,7 @@ from function.file_handler import FileHandler
 from function.pdf_splitter import PDFSplitter
 from function.word_splitter import WordSplitter
 from function.txt_splitter import TxtSplitter
+from function.document_analyzer import DocumentAnalyzer
 
 
 class MainApplication:
@@ -71,6 +73,7 @@ class MainApplication:
         self.pdf_splitter = PDFSplitter()
         self.word_splitter = WordSplitter()
         self.txt_splitter = TxtSplitter()
+        self.document_analyzer = DocumentAnalyzer()
 
         # 当前选中的文件路径
         self.current_file_path = ""
@@ -150,6 +153,15 @@ class MainApplication:
         )
         self.split_button.pack(side=tk.LEFT, padx=(0, 10))
 
+        # 文档分析按钮
+        self.analyze_button = ttk.Button(
+            button_frame,
+            text="分析文档",
+            command=self.analyze_document,
+            state=tk.DISABLED  # 初始禁用，直到选择文件
+        )
+        self.analyze_button.pack(side=tk.LEFT, padx=(0, 10))
+
         # 取消按钮
         self.cancel_button = ttk.Button(
             button_frame,
@@ -186,40 +198,76 @@ class MainApplication:
         Args:
             *args: 传递给回调函数的参数（未使用）
         """
-        # 获取选中的文件路径
+        # 获取选中的所有文件
+        selected_files = self.file_selector.get_selected_files()
         selected_file = self.file_selector.get_selected_file()
 
-        # 检查文件是否存在（注意：这里需要排除提示信息如"文件不存在"或"不支持的文件类型"）
-        if selected_file and os.path.exists(selected_file):
-            self.current_file_path = selected_file
+        # 检查是否有选中的文件
+        if selected_files:
+            # 启用分析按钮（支持多文件分析）
+            self.analyze_button.config(state=tk.NORMAL)
 
-            # 启用分割按钮
-            self.split_button.config(state=tk.NORMAL)
+            # 如果只有一个文件，启用分割按钮并调整设置
+            if len(selected_files) == 1:
+                file_path = selected_files[0]
+                if os.path.exists(file_path):
+                    self.current_file_path = file_path
+                    self.split_button.config(state=tk.NORMAL)
 
-            # 根据文件类型调整设置面板
-            file_type = self.file_handler.get_file_type(selected_file)
-            if file_type == '.pdf':
-                # PDF 文件可以按页数或字数分割
-                self.settings_panel.set_mode_state(tk.NORMAL)
+                    # 根据文件类型调整设置面板
+                    file_type = self.file_handler.get_file_type(file_path)
+                    if file_type == '.pdf':
+                        self.settings_panel.set_mode_state(tk.NORMAL)
+                    else:
+                        self.settings_panel.mode_var.set("chars")
+                        self.settings_panel.set_mode_state(tk.DISABLED)
+
+                    # 设置默认输出路径为文件所在目录
+                    default_output = str(Path(file_path).parent)
+                    self.settings_panel.set_default_output_path(default_output)
+
+                    # 记录日志
+                    self.log_message(f"已选择文件: {file_path}")
             else:
-                # 非PDF文件只能按字数分割
-                self.settings_panel.mode_var.set("chars")
-                self.settings_panel.set_mode_state(tk.DISABLED)
-
-            # 设置默认输出路径为文件所在目录
-            default_output = str(Path(selected_file).parent)
-            self.settings_panel.set_default_output_path(default_output)
-
-            # 记录日志
-            self.log_message(f"已选择文件: {selected_file}")
-        elif selected_file and ("文件不存在" in selected_file or "不支持的文件类型" in selected_file):
-            # 如果是错误信息，禁用分割按钮
+                # 多个文件，禁用分割按钮（分割功能只支持单个文件）
+                self.split_button.config(state=tk.DISABLED)
+                self.log_message(f"已选择 {len(selected_files)} 个文件，可用于分析")
+        elif selected_file and ("文件不存在" in selected_file or "不支持的文件类型" in selected_file or "拖拽的文件无效" in selected_file):
+            # 文件选择错误
             self.split_button.config(state=tk.DISABLED)
-            # 记录错误日志
+            self.analyze_button.config(state=tk.DISABLED)
             self.log_message(f"文件选择错误: {selected_file}")
         else:
-            # 如果文件不存在或未选择文件，禁用分割按钮
+            # 未选择文件
             self.split_button.config(state=tk.DISABLED)
+            self.analyze_button.config(state=tk.DISABLED)
+
+    def analyze_document(self):
+        """分析文档
+
+        该方法在用户点击"分析文档"按钮后被调用，
+        分析当前选中的文档（支持多个）并显示元数据信息。
+        """
+        # 获取选中的所有文件
+        selected_files = self.file_selector.get_selected_files()
+
+        if not selected_files:
+            messagebox.showerror("错误", "请选择一个或多个有效的文件")
+            return
+
+        try:
+            # 分析所有文档
+            self.log_message(f"正在分析 {len(selected_files)} 个文档...")
+            results = self.document_analyzer.analyze_files(selected_files)
+
+            # 显示分析结果
+            AnalysisResultWindow(self.root, results)
+            self.log_message(f"文档分析完成，共分析 {len(results)} 个文件")
+
+        except Exception as e:
+            error_msg = f"文档分析失败: {str(e)}"
+            self.log_message(error_msg)
+            messagebox.showerror("错误", error_msg)
 
     def start_splitting(self):
         """开始分割文档

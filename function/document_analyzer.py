@@ -1,252 +1,170 @@
 """
-文档信息提取工具
+文档分析器模块
 
-该工具可以分析PDF、Word和TXT文件并提取相关信息，
-包括文件名、字符总数和页数（适用于PDF和Word文档）。
+该模块提供文档元数据提取功能，支持 PDF、Word (.docx) 和 TXT 格式。
+可以提取文件名、字符数和页数等信息。
 """
-import os
-import sys
 from pathlib import Path
-from typing import List, Tuple, Dict, Optional
-
-# 尝试导入所需的库
-try:
-    import PyPDF2
-    from docx import Document
-except ImportError as e:
-    print(f"缺少必要的依赖库: {e}")
-    print("请运行: pip install PyPDF2 python-docx")
-    sys.exit(1)
+from typing import Dict, List, Optional
+import PyPDF2
+from docx import Document
 
 
-def count_chars_in_pdf(file_path: str) -> int:
+class DocumentAnalyzer:
+    """文档分析器类
+
+    用于提取文档的元数据信息，包括文件名、字符数和页数。
     """
-    计算PDF文件中的字符数
-    
-    Args:
-        file_path: PDF文件路径
-        
-    Returns:
-        字符总数
-    """
-    try:
-        with open(file_path, 'rb') as file:
-            reader = PyPDF2.PdfReader(file)
-            total_chars = 0
-            
-            for page in reader.pages:
+
+    def __init__(self):
+        """初始化文档分析器"""
+        pass
+
+    def analyze_file(self, file_path: str) -> Dict[str, Optional[str]]:
+        """分析单个文档文件
+
+        Args:
+            file_path (str): 文档文件路径
+
+        Returns:
+            Dict[str, Optional[str]]: 包含文件名、字符数和页数的字典
+                {
+                    'filename': str,      # 文件名（含扩展名）
+                    'char_count': str,    # 字符数（格式化后的字符串）
+                    'page_count': str     # 页数（格式化后的字符串，TXT 文件为 '-'）
+                }
+        """
+        path = Path(file_path)
+
+        if not path.exists():
+            return {
+                'filename': path.name,
+                'char_count': '错误',
+                'page_count': '错误'
+            }
+
+        file_ext = path.suffix.lower()
+
+        try:
+            if file_ext == '.pdf':
+                return self._analyze_pdf(path)
+            elif file_ext == '.docx':
+                return self._analyze_docx(path)
+            elif file_ext == '.txt':
+                return self._analyze_txt(path)
+            else:
+                return {
+                    'filename': path.name,
+                    'char_count': '不支持的格式',
+                    'page_count': '-'
+                }
+        except Exception as e:
+            return {
+                'filename': path.name,
+                'char_count': f'错误: {str(e)}',
+                'page_count': '-'
+            }
+
+    def _analyze_pdf(self, path: Path) -> Dict[str, Optional[str]]:
+        """分析 PDF 文件
+
+        Args:
+            path (Path): PDF 文件路径
+
+        Returns:
+            Dict[str, Optional[str]]: PDF 文件的元数据
+        """
+        char_count = 0
+        page_count = 0
+
+        with open(path, 'rb') as file:
+            pdf_reader = PyPDF2.PdfReader(file)
+            page_count = len(pdf_reader.pages)
+
+            for page in pdf_reader.pages:
                 text = page.extract_text()
-                total_chars += len(text)
-                
-        return total_chars
-    except Exception as e:
-        raise Exception(f"读取PDF文件时出错: {str(e)}")
+                if text:
+                    char_count += len(text)
 
+        return {
+            'filename': path.name,
+            'char_count': self._format_number(char_count),
+            'page_count': str(page_count)
+        }
 
-def count_chars_and_pages_in_pdf(file_path: str) -> Tuple[int, int]:
-    """
-    计算PDF文件中的字符数和页数
-    
-    Args:
-        file_path: PDF文件路径
-        
-    Returns:
-        (字符总数, 页数)
-    """
-    try:
-        with open(file_path, 'rb') as file:
-            reader = PyPDF2.PdfReader(file)
-            total_chars = 0
-            total_pages = len(reader.pages)
-            
-            for page in reader.pages:
-                text = page.extract_text()
-                total_chars += len(text)
-                
-        return total_chars, total_pages
-    except Exception as e:
-        raise Exception(f"读取PDF文件时出错: {str(e)}")
+    def _analyze_docx(self, path: Path) -> Dict[str, Optional[str]]:
+        """分析 Word (.docx) 文件
 
+        Args:
+            path (Path): Word 文件路径
 
-def count_chars_and_pages_in_word(file_path: str) -> Tuple[int, int]:
-    """
-    计算Word文档中的字符数和页数
-    
-    Args:
-        file_path: Word文档路径
-        
-    Returns:
-        (字符总数, 页数估算)
-    """
-    try:
-        doc = Document(file_path)
-        total_chars = 0
-        
-        # 提取所有段落文本
+        Returns:
+            Dict[str, Optional[str]]: Word 文件的元数据
+        """
+        doc = Document(path)
+        char_count = 0
+
+        # 统计所有段落的字符数
         for paragraph in doc.paragraphs:
-            total_chars += len(paragraph.text)
-        
-        # 提取表格中的文本
+            char_count += len(paragraph.text)
+
+        # 统计表格中的字符数
         for table in doc.tables:
             for row in table.rows:
                 for cell in row.cells:
-                    total_chars += len(cell.text)
-        
-        # 估算页数（基于字符数，每页约2000字符）
-        estimated_pages = max(1, (total_chars + 1999) // 2000)  # 向上取整
-        
-        return total_chars, estimated_pages
-    except Exception as e:
-        raise Exception(f"读取Word文档时出错: {str(e)}")
+                    char_count += len(cell.text)
 
+        page_count = len(doc.sections)
 
-def count_chars_in_txt(file_path: str) -> int:
-    """
-    计算TXT文件中的字符数
-    
-    Args:
-        file_path: TXT文件路径
-        
-    Returns:
-        字符总数
-    """
-    try:
-        with open(file_path, 'r', encoding='utf-8') as file:
+        return {
+            'filename': path.name,
+            'char_count': self._format_number(char_count),
+            'page_count': str(page_count)
+        }
+
+    def _analyze_txt(self, path: Path) -> Dict[str, Optional[str]]:
+        """分析 TXT 文件
+
+        Args:
+            path (Path): TXT 文件路径
+
+        Returns:
+            Dict[str, Optional[str]]: TXT 文件的元数据
+        """
+        with open(path, 'r', encoding='utf-8', errors='ignore') as file:
             content = file.read()
-            return len(content)
-    except UnicodeDecodeError:
-        # 如果UTF-8解码失败，尝试其他编码
-        try:
-            with open(file_path, 'r', encoding='gbk') as file:
-                content = file.read()
-                return len(content)
-        except UnicodeDecodeError:
-            raise Exception(f"无法读取TXT文件，编码格式不支持: {file_path}")
-    except Exception as e:
-        raise Exception(f"读取TXT文件时出错: {str(e)}")
+            char_count = len(content)
 
+        return {
+            'filename': path.name,
+            'char_count': self._format_number(char_count),
+            'page_count': '-'
+        }
 
-def get_file_info(file_path: str) -> Dict[str, any]:
-    """
-    获取单个文件的信息
-    
-    Args:
-        file_path: 文件路径
-        
-    Returns:
-        包含文件信息的字典
-    """
-    path_obj = Path(file_path)
-    file_ext = path_obj.suffix.lower()
-    
-    info = {
-        'file_name': path_obj.name,
-        'char_count': 0,
-        'page_count': '-'
-    }
-    
-    if file_ext == '.pdf':
-        char_count, page_count = count_chars_and_pages_in_pdf(file_path)
-        info['char_count'] = char_count
-        info['page_count'] = page_count
-    elif file_ext == '.docx':
-        char_count, page_count = count_chars_and_pages_in_word(file_path)
-        info['char_count'] = char_count
-        info['page_count'] = page_count
-    elif file_ext == '.txt':
-        char_count = count_chars_in_txt(file_path)
-        info['char_count'] = char_count
-    else:
-        raise Exception(f"不支持的文件格式: {file_ext}")
-    
-    return info
+    def analyze_files(self, file_paths: List[str]) -> List[Dict[str, Optional[str]]]:
+        """分析多个文档文件
 
+        Args:
+            file_paths (List[str]): 文档文件路径列表
 
-def analyze_documents(file_paths: List[str]) -> List[Dict[str, any]]:
-    """
-    分析多个文档文件并提取信息
-    
-    Args:
-        file_paths: 文件路径列表
-        
-    Returns:
-        包含所有文件信息的列表
-    """
-    results = []
-    
-    for file_path in file_paths:
-        try:
-            if not os.path.exists(file_path):
-                print(f"警告: 文件不存在 - {file_path}")
-                continue
-                
-            info = get_file_info(file_path)
-            results.append(info)
-        except Exception as e:
-            print(f"处理文件 {file_path} 时出错: {str(e)}")
-            continue
-    
-    return results
+        Returns:
+            List[Dict[str, Optional[str]]]: 所有文档的元数据列表
+        """
+        results = []
 
+        for file_path in file_paths:
+            result = self.analyze_file(file_path)
+            results.append(result)
 
-def format_table(results: List[Dict[str, any]]) -> str:
-    """
-    将结果格式化为表格形式
+        return results
 
-    Args:
-        results: 文件信息列表
+    def _format_number(self, number: int) -> str:
+        """格式化数字，添加千位分隔符
 
-    Returns:
-        格式化的表格字符串
-    """
-    if not results:
-        return "没有找到有效的文件或所有文件都无法处理"
+        Args:
+            number (int): 要格式化的数字
 
-    # 固定列宽以确保表格整齐
-    name_width = 30
-    char_width = 12
-    page_width = 8
-
-    # 构建表格
-    table = []
-    header = f"{'文件名':<{name_width}} │ {'字符数':>{char_width}} │ {'页数':>{page_width}}"
-    separator = "─" * name_width + "─┼─" + "─" * char_width + "─┼─" + "─" * page_width
-
-    table.append(f"┌{separator}┐")
-    table.append(f"│ {header} │")
-    table.append(f"├{separator}┤")
-
-    for item in results:
-        # 截断过长的文件名
-        file_name = item['file_name'][:name_width-3] + "..." if len(item['file_name']) > name_width-3 else item['file_name']
-        char_formatted = f"{item['char_count']:,}"  # 添加千位分隔符
-        page_info = str(item['page_count'])
-
-        row = f"│ {file_name:<{name_width}} │ {char_formatted:>{char_width}} │ {page_info:>{page_width}} │"
-        table.append(row)
-
-    table.append(f"└{separator}┘")
-
-    return "\n".join(table)
-
-
-def main():
-    """
-    主函数，演示如何使用文档分析工具
-    """
-    if len(sys.argv) < 2:
-        print("使用方法: python document_analyzer.py <文件路径1> [文件路径2] ...")
-        print("例如: python document_analyzer.py report.pdf proposal.docx notes.txt")
-        return
-    
-    file_paths = sys.argv[1:]
-    print("正在分析文档...")
-    
-    results = analyze_documents(file_paths)
-    
-    print("\n文档信息汇总:")
-    print(format_table(results))
-
-
-if __name__ == "__main__":
-    main()
+        Returns:
+            str: 格式化后的字符串
+        """
+        return f"{number:,}"
