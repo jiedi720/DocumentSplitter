@@ -13,7 +13,7 @@ else:
     current_dir = os.path.dirname(os.path.abspath(sys.argv[0])) if len(sys.argv) > 0 else os.getcwd()
 
 # Full path to the icon file
-ICON_PATH = None
+ICON_PATH = os.path.join(current_dir, 'icons', 'DocumentSplitter.png')
 
 # 使用 collect_all 自动收集依赖模块
 # collect_all 返回 (binaries, datas, hiddenimports)
@@ -76,6 +76,7 @@ a = Analysis(
         # Include project directories
         ('gui', 'gui'),
         ('function', 'function'),
+        ('icons', 'icons'),
     ] + all_datas,
     hiddenimports=[
         # 项目模块：根据实际情况添加

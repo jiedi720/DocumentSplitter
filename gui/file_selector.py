@@ -18,18 +18,25 @@ class FileSelector(ttk.Frame):
     采用上下分行布局，视觉层级清晰，符合工程类软件设计习惯。
     """
 
-    def __init__(self, parent, **kwargs):
+    def __init__(self, parent, config_manager=None, **kwargs):
         """初始化文件选择组件
 
         Args:
             parent: 父级组件
+            config_manager: 配置管理器实例（可选）
             **kwargs: 传递给父类构造函数的其他参数
         """
         super().__init__(parent, **kwargs)
 
+        # 配置管理器
+        self.config_manager = config_manager
+
         # 创建一个StringVar变量来存储选中的文件路径（支持多文件）
         self.selected_file_path = tk.StringVar()
         self.selected_files = []  # 存储选中的文件列表
+
+        # 加载保存的目录
+        self.load_saved_directories()
 
         # 创建界面组件
         self.create_widgets()
@@ -214,14 +221,21 @@ class FileSelector(ttk.Frame):
         # 获取主窗口
         parent = self.winfo_toplevel()
 
+        # 使用上次选择的目录作为初始目录
+        initial_dir = self.last_input_dir if self.last_input_dir else None
+
         # 打开目录选择对话框
         directory = filedialog.askdirectory(
             parent=parent,
-            title='选择包含文件的目录'
+            title='选择包含文件的目录',
+            initialdir=initial_dir
         )
 
         if not directory:
             return
+
+        # 保存选择的目录
+        self.save_input_directory(directory)
 
         # 支持的文件扩展名
         supported_extensions = ['.pdf', '.docx', '.txt']
@@ -281,6 +295,31 @@ class FileSelector(ttk.Frame):
         """
         self.selected_files = [file_path]
         self.selected_file_path.set(file_path)
+
+    def load_saved_directories(self):
+        """加载保存的目录配置"""
+        if self.config_manager:
+            try:
+                config = self.config_manager.read_config()
+                self.last_input_dir = config.get("Paths", {}).get("input_dir", "")
+                self.last_output_dir = config.get("Paths", {}).get("output_dir", "")
+            except Exception:
+                self.last_input_dir = ""
+                self.last_output_dir = ""
+        else:
+            self.last_input_dir = ""
+            self.last_output_dir = ""
+
+    def save_input_directory(self, directory):
+        """保存输入目录到配置文件"""
+        if self.config_manager:
+            try:
+                config = self.config_manager.read_config()
+                config["Paths"]["input_dir"] = directory
+                self.config_manager.save_config(config)
+                self.last_input_dir = directory
+            except Exception:
+                pass
 
     def setup_drag_and_drop(self):
         """设置拖放功能

@@ -126,7 +126,7 @@ class MainApplication:
         file_frame.columnconfigure(0, weight=1)
 
         # 创建文件选择组件
-        self.file_selector = FileSelector(file_frame)
+        self.file_selector = FileSelector(file_frame, config_manager=self.config_manager)
         self.file_selector.grid(row=0, column=0, sticky=(tk.W, tk.E))
 
         # 绑定文件选择变化事件，当文件路径改变时触发回调
@@ -648,8 +648,14 @@ class MainApplication:
         该方法加载并设置应用程序的图标，支持开发环境和打包后的环境。
         """
         try:
+            import sys
             # 获取图标文件路径
-            icon_path = Path(__file__).resolve().parents[1] / 'icons' / 'DocumentSplitter.png'
+            if hasattr(sys, '_MEIPASS'):
+                # 打包后环境：使用临时目录中的图标
+                icon_path = Path(sys._MEIPASS) / 'icons' / 'DocumentSplitter.png'
+            else:
+                # 开发环境：使用项目目录中的图标
+                icon_path = Path(__file__).resolve().parents[1] / 'icons' / 'DocumentSplitter.png'
 
             # 检查图标文件是否存在
             if icon_path.exists():
