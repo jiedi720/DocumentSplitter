@@ -13,17 +13,30 @@ else:
     current_dir = os.path.dirname(os.path.abspath(sys.argv[0])) if len(sys.argv) > 0 else os.getcwd()
 
 # Full path to the icon file
-ICON_PATH = os.path.join(current_dir, 'icons', 'DocumentSplitter.png')
+ICON_PATH = None
 
 # 使用 collect_all 自动收集依赖模块
 # collect_all 返回 (binaries, datas, hiddenimports)
-tk_binaries, tk_datas, tk_hiddenimports = collect_all('tkinter')
-tkdnd_binaries, tkdnd_datas, tkdnd_hiddenimports = collect_all('tkinterdnd2')
+all_binaries = []
+all_datas = []
+all_hiddenimports = []
 
-# 合并所有依赖
-all_binaries = tk_binaries + tkdnd_binaries
-all_datas = tk_datas + tkdnd_datas
-all_hiddenimports = tk_hiddenimports + tkdnd_hiddenimports
+# 尝试收集常见模块的依赖
+try:
+    tk_binaries, tk_datas, tk_hiddenimports = collect_all('tkinter')
+    all_binaries.extend(tk_binaries)
+    all_datas.extend(tk_datas)
+    all_hiddenimports.extend(tk_hiddenimports)
+except Exception:
+    pass
+
+try:
+    tkdnd_binaries, tkdnd_datas, tkdnd_hiddenimports = collect_all('tkinterdnd2')
+    all_binaries.extend(tkdnd_binaries)
+    all_datas.extend(tkdnd_datas)
+    all_hiddenimports.extend(tkdnd_hiddenimports)
+except Exception:
+    pass
 
 # 去重处理：确保每个 DLL 只被打包一次
 seen_binaries = set()
@@ -63,28 +76,12 @@ a = Analysis(
         # Include project directories
         ('gui', 'gui'),
         ('function', 'function'),
-        ('icons', 'icons'),
-        # 配置文件支持：如果有配置文件，取消下面的注释
-        # ('config.ini', '.'),
     ] + all_datas,
     hiddenimports=[
-        # 项目模块
-        'function.file_handler',
-        'function.pdf_splitter',
-        'function.word_splitter',
-        'function.txt_splitter',
-        'function.document_analyzer',
-        'gui.file_selector',
-        'gui.main_window',
-        'gui.settings_panel',
-        'gui.analysis_result_window',
-        # 第三方库依赖
-        'PyPDF2',
-        'docx',
-        'pdfplumber',
-        'reportlab',
-        'reportlab.pdfgen',
-        'reportlab.lib',
+        # 项目模块：根据实际情况添加
+        # 'module.submodule',
+        # 第三方库依赖：根据实际情况添加
+        # 'dependency',
     ] + all_hiddenimports,
     hookspath=[],
     hooksconfig={},
@@ -98,7 +95,7 @@ a = Analysis(
         'IPython',
         'pytest',
         'unittest',
-        # PySide6 相关（本项目使用 tkinter，不需要）
+        # GUI 库相关（根据实际使用情况调整）
         'PySide6',
         'PyQt5',
         'PyQt6',
