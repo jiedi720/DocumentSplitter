@@ -189,7 +189,7 @@ class MainApplication:
         # 获取选中的文件路径
         selected_file = self.file_selector.get_selected_file()
 
-        # 检查文件是否存在
+        # 检查文件是否存在（注意：这里需要排除提示信息如"文件不存在"或"不支持的文件类型"）
         if selected_file and os.path.exists(selected_file):
             self.current_file_path = selected_file
 
@@ -212,6 +212,11 @@ class MainApplication:
 
             # 记录日志
             self.log_message(f"已选择文件: {selected_file}")
+        elif selected_file and ("文件不存在" in selected_file or "不支持的文件类型" in selected_file):
+            # 如果是错误信息，禁用分割按钮
+            self.split_button.config(state=tk.DISABLED)
+            # 记录错误日志
+            self.log_message(f"文件选择错误: {selected_file}")
         else:
             # 如果文件不存在或未选择文件，禁用分割按钮
             self.split_button.config(state=tk.DISABLED)

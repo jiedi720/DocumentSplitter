@@ -52,15 +52,14 @@ class FileSelector(ttk.Frame):
         # 将按钮放置在左侧，并设置右边距
         self.select_button.pack(side=tk.LEFT, padx=(0, 10))
 
-        # 创建拖放区域容器
-        self.drop_frame = ttk.Frame(self)
+        # 创建拖放区域容器（使用 tk.Frame 而不是 ttk.Frame 以支持拖放）
+        self.drop_frame = tk.Frame(self, relief=tk.SUNKEN, borderwidth=1)
         self.drop_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
         # 创建文件路径显示标签（也作为拖放区域）
         self.file_label = ttk.Label(
             self.drop_frame,
             textvariable=self.selected_file_path,  # 绑定到文件路径变量
-            relief=tk.SUNKEN,  # 设置下沉边框效果
             anchor=tk.W,  # 文本左对齐
             padding=5
         )
@@ -128,11 +127,7 @@ class FileSelector(ttk.Frame):
             # 获取根窗口
             root = self.winfo_toplevel()
 
-            # 检查根窗口是否支持拖放
-            if not hasattr(root, 'tkinterdnd2'):
-                print("主窗口不支持拖放功能")
-                return
-
+            # 直接尝试注册拖放事件，不进行属性检查
             print("正在注册拖放事件...")
 
             # 为拖放区域注册拖放事件
@@ -159,7 +154,7 @@ class FileSelector(ttk.Frame):
         Args:
             event: 拖拽事件对象
         """
-        self.file_label.config(relief=tk.RAISED, background="#e8f4f8")
+        self.drop_frame.config(background="#e8f4f8")
 
     def on_drag_leave(self, event):
         """拖拽离开时的视觉反馈
@@ -167,7 +162,7 @@ class FileSelector(ttk.Frame):
         Args:
             event: 拖拽事件对象
         """
-        self.file_label.config(relief=tk.SUNKEN, background="")
+        self.drop_frame.config(background="")
 
     def on_drop(self, event):
         """处理文件拖放事件
@@ -178,16 +173,54 @@ class FileSelector(ttk.Frame):
         # 获取拖放的文件路径
         files = event.data
 
-        # 处理 Windows 路径格式（可能包含花括号）
-        if files.startswith('{') and files.endswith('}'):
-            files = files[1:-1]
+        print(f"原始文件路径: {files}")
+
+        # 处理 Windows 路径格式（可能包含花括号或引号）
+        if isinstance(files, str):
+            # 移除可能的花括号
+            if files.startswith('{') and files.endswith('}'):
+                files = files[1:-1]
+            # 移除可能的引号
+            files = files.strip('"\'')
 
         # 分割多个文件（如果用户拖放了多个）
-        file_list = files.split()
+        # 对于Windows，有时路径中包含空格，需要更智能地处理
+        import re
+        # 更智能地处理文件路径，特别是包含空格的路径
+        # 首先尝试匹配用引号包围的路径
+        quoted_paths = re.findall(r'"([^"]*)"|\'([^\']*)\'', files)
+        if quoted_paths:
+            # 如果找到引号包围的路径，使用这些路径
+            file_list = [match[0] or match[1] for match in quoted_paths if match[0] or match[1]]
+        else:
+            # 如果没有引号包围的路径，对于Windows拖拽，通常整个路径被花括号包围作为一个整体
+            # 或者路径中包含空格但没有引号，我们需要特殊处理这种情况
+            files_stripped = files.strip('{}')  # 移除最外层的花括号
+
+            # 如果路径包含常见的文件扩展名且有空格，很可能这是一个带空格的完整路径
+            if any(ext in files_stripped.lower() for ext in ['.pdf', '.docx', '.txt']):
+                # 假设整个（去除花括号后）的字符串是一个路径
+                file_list = [files_stripped]
+            else:
+                # 否则按空格分割
+                file_list = files_stripped.split()
+
+        print(f"文件列表: {file_list}")
 
         # 只处理第一个文件
         if file_list:
             file_path = file_list[0].strip()
+
+            print(f"处理后的文件路径: {file_path}")
+
+            # 尝试规范化路径
+            try:
+                # 使用 Path 对象处理路径，这会自动处理各种格式
+                normalized_path = Path(file_path).resolve()
+                file_path = str(normalized_path)
+                print(f"规范化后的路径: {file_path}")
+            except Exception as e:
+                print(f"路径规范化失败: {e}")
 
             # 验证文件是否存在
             if Path(file_path).exists():
@@ -198,13 +231,34 @@ class FileSelector(ttk.Frame):
                 if file_ext in supported_extensions:
                     self.selected_file_path.set(file_path)
                     # 触发变量变化事件，通知主窗口
-                    self.selected_file_path.trace_vwrite('w', lambda *args: None)
+                    # 注意：trace_vwrite 已被弃用，使用 trace_add 替代
+                    if hasattr(self.selected_file_path, 'trace_add'):
+                        self.selected_file_path.trace_add('write', lambda *args: None)
                 else:
                     # 不支持的文件类型
                     self.selected_file_path.set(f"不支持的文件类型：{file_ext}")
             else:
-                # 文件不存在
-                self.selected_file_path.set("文件不存在")
+                # 文件不存在 - 尝试多种路径格式
+                print(f"文件不存在: {file_path}")
+
+                # 尝试解码可能的URL编码路径
+                import urllib.parse
+                decoded_path = urllib.parse.unquote(file_path)
+                if Path(decoded_path).exists():
+                    print(f"解码后的路径存在: {decoded_path}")
+                    file_ext = Path(decoded_path).suffix.lower()
+                    supported_extensions = ['.pdf', '.docx', '.txt']
+                    if file_ext in supported_extensions:
+                        self.selected_file_path.set(decoded_path)
+                        # 触发变量变化事件，通知主窗口
+                        if hasattr(self.selected_file_path, 'trace_add'):
+                            self.selected_file_path.trace_add('write', lambda *args: None)
+                    else:
+                        # 不支持的文件类型
+                        self.selected_file_path.set(f"不支持的文件类型：{file_ext}")
+                else:
+                    # 最终还是不存在，显示错误信息
+                    self.selected_file_path.set("文件不存在")
 
         # 恢复默认样式
-        self.file_label.config(relief=tk.SUNKEN, background="")
+        self.drop_frame.config(background="")
