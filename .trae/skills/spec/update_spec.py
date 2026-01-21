@@ -1,4 +1,50 @@
-# -*- mode: python ; coding: utf-8 -*-
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Spec 文件重写工具
+根据 GifMaker.spec 的配置逻辑，重写 DocumentSplitter.spec 文件
+确保生成的 .exe 文件标题栏正常显示图标，且程序运行后能准确识别并读取同级目录下的配置文件
+"""
+
+import os
+import sys
+
+def update_spec_file():
+    """
+    更新 DocumentSplitter.spec 文件
+    根据 GifMaker.spec 的配置逻辑，生成新的配置文件
+    """
+    # 获取当前目录的绝对路径
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    # 回到项目根目录
+    project_root = os.path.abspath(os.path.join(current_dir, '../../..'))
+    
+    # 生成新的 spec 文件内容
+    spec_content = generate_spec_content(project_root)
+    
+    # 写入到 DocumentSplitter.spec 文件
+    spec_file_path = os.path.join(project_root, 'DocumentSplitter.spec')
+    with open(spec_file_path, 'w', encoding='utf-8') as f:
+        f.write(spec_content)
+    
+    print(f"✅ 已成功更新 {spec_file_path}")
+    print("📋 生成的配置文件包含以下特性：")
+    print("   - 图标配置：自动定位 icons/DocumentSplitter.png 作为程序图标")
+    print("   - 配置文件支持：程序运行时能识别同级目录下的配置文件")
+    print("   - 依赖管理：自动收集所有必要的依赖模块")
+    print("   - 打包优化：使用 UPX 压缩可执行文件，排除不必要的模块")
+
+def generate_spec_content(project_root):
+    """
+    生成 spec 文件内容
+    
+    Args:
+        project_root: 项目根目录路径
+    
+    Returns:
+        生成的 spec 文件内容字符串
+    """
+    spec_content = f'''# -*- mode: python ; coding: utf-8 -*-
 import os
 import sys
 from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules, collect_all
@@ -87,7 +133,7 @@ a = Analysis(
         'reportlab.lib',
     ] + all_hiddenimports,
     hookspath=[],
-    hooksconfig={},
+    hooksconfig={{}},
     runtime_hooks=[],
     excludes=[
         # Exclude unnecessary modules to reduce size
@@ -137,3 +183,8 @@ coll = COLLECT(
     upx_exclude=[],     # Files to exclude from compression
     name='DocumentSplitter',  # Final folder name that will be generated
 )
+'''
+    return spec_content
+
+if __name__ == "__main__":
+    update_spec_file()
