@@ -31,7 +31,9 @@ class DocumentAnalyzer:
                 {
                     'filename': str,      # 文件名（含扩展名）
                     'char_count': str,    # 字符数（格式化后的字符串）
-                    'page_count': str     # 页数（格式化后的字符串，TXT 文件为 '-'）
+                    'page_count': str,    # 页数（格式化后的字符串，TXT 文件为 '-'）
+                    'file_type': str,     # 文件类型（扩展名）
+                    'file_size': str      # 文件大小（以 MB 为单位，格式化后的字符串）
                 }
         """
         path = Path(file_path)
@@ -40,29 +42,40 @@ class DocumentAnalyzer:
             return {
                 'filename': path.name,
                 'char_count': '错误',
-                'page_count': '错误'
+                'page_count': '错误',
+                'file_type': path.suffix,
+                'file_size': '错误'
             }
 
         file_ext = path.suffix.lower()
 
         try:
             if file_ext == '.pdf':
-                return self._analyze_pdf(path)
+                result = self._analyze_pdf(path)
             elif file_ext == '.docx':
-                return self._analyze_docx(path)
+                result = self._analyze_docx(path)
             elif file_ext == '.txt':
-                return self._analyze_txt(path)
+                result = self._analyze_txt(path)
             else:
-                return {
+                result = {
                     'filename': path.name,
                     'char_count': '不支持的格式',
                     'page_count': '-'
                 }
+            
+            # 添加文件类型和文件大小
+            result['file_type'] = file_ext
+            result['file_size'] = self._get_file_size(path)
+            
+            return result
+            
         except Exception as e:
             return {
                 'filename': path.name,
                 'char_count': f'错误: {str(e)}',
-                'page_count': '-'
+                'page_count': '-',
+                'file_type': path.suffix,
+                'file_size': '错误'
             }
 
     def _analyze_pdf(self, path: Path) -> Dict[str, Optional[str]]:
@@ -168,3 +181,25 @@ class DocumentAnalyzer:
             str: 格式化后的字符串
         """
         return f"{number:,}"
+
+    def _get_file_size(self, path: Path) -> str:
+        """获取文件大小（以 MB 为单位）
+
+        Args:
+            path (Path): 文件路径
+
+        Returns:
+            str: 格式化后的文件大小字符串（以 MB 为单位）
+        """
+        try:
+            # 获取文件大小（字节）
+            size_bytes = path.stat().st_size
+            
+            # 转换为 MB
+            size_mb = size_bytes / (1024 * 1024)
+            
+            # 格式化，保留两位小数
+            return f"{size_mb:.2f} MB"
+            
+        except Exception:
+            return '错误'

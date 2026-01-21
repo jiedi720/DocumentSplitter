@@ -8,6 +8,7 @@ import os
 from docx import Document
 from pathlib import Path
 from .file_handler import FileHandler
+from .chapter_detector import ChapterDetector
 
 
 class WordSplitter:
@@ -23,8 +24,9 @@ class WordSplitter:
         创建文件处理器实例，用于处理通用文件操作。
         """
         self.file_handler = FileHandler()
+        self.chapter_detector = ChapterDetector()
 
-    def split_by_chars(self, input_path, chars_per_split, output_dir=None):
+    def split_by_chars(self, input_path, chars_per_split, output_dir=None, preserve_chapter=False):
         """
         按字符数分割 Word 文件
 
@@ -35,6 +37,7 @@ class WordSplitter:
             input_path (str): 输入 Word 文件的完整路径
             chars_per_split (int): 每个分割文件应包含的字符数
             output_dir (str, optional): 输出目录路径，默认为输入文件所在目录
+            preserve_chapter (bool, optional): 是否保留章节完整性，默认为 False
 
         Returns:
             list: 包含所有成功分割的文件路径的列表
@@ -89,8 +92,28 @@ class WordSplitter:
 
         # 按字符数分割文本内容
         text_parts = []  # 存储分割后的文本片段
-        for i in range(0, len(text_content), chars_per_split):
-            text_parts.append(text_content[i:i + chars_per_split])
+
+        if preserve_chapter:
+            # 保留章节完整性：调整分割点
+            current_pos = 0
+            while current_pos < len(text_content):
+                target_pos = min(current_pos + chars_per_split, len(text_content))
+
+                # 调整分割点以避免在章节中间分割
+                adjusted_pos = self.chapter_detector.adjust_split_point(
+                    target_pos, text_content, 'cn', max_adjustment=chars_per_split // 2
+                )
+
+                # 确保至少分割一部分内容
+                if adjusted_pos <= current_pos:
+                    adjusted_pos = target_pos
+
+                text_parts.append(text_content[current_pos:adjusted_pos])
+                current_pos = adjusted_pos
+        else:
+            # 不保留章节完整性：直接按字符数分割
+            for i in range(0, len(text_content), chars_per_split):
+                text_parts.append(text_content[i:i + chars_per_split])
 
         # 将每个文本部分写入新的 Word 文件
         output_paths = []  # 存储输出文件路径的列表
@@ -115,7 +138,7 @@ class WordSplitter:
 
         return output_paths
 
-    def split_by_paragraphs(self, input_path, paras_per_split, output_dir=None):
+    def split_by_paragraphs(self, input_path, paras_per_split, output_dir=None, preserve_chapter=False):
         """
         按段落数分割 Word 文件
 
@@ -126,6 +149,7 @@ class WordSplitter:
             input_path (str): 输入 Word 文件的完整路径
             paras_per_split (int): 每个分割文件应包含的段落数
             output_dir (str, optional): 输出目录路径，默认为输入文件所在目录
+            preserve_chapter (bool, optional): 是否保留章节完整性，默认为 False
 
         Returns:
             list: 包含所有成功分割的文件路径的列表
@@ -165,14 +189,38 @@ class WordSplitter:
             new_doc.save(output_path)
             return [output_path]
 
+        # 如果需要保留章节完整性，先查找所有章节段落位置
+        chapter_paras = []
+        if preserve_chapter:
+            chapter_paras = self.chapter_detector.find_paragraph_chapter_positions(all_paragraphs)
+            chapter_para_indices = [ch['para_index'] for ch in chapter_paras]
+
         # 按段落数分割文档
         output_paths = []  # 存储输出文件路径的列表
         part_num = 1       # 分割部分的编号
+        current_para = 0   # 当前处理到的段落索引
 
-        # 循环处理每个分割部分
-        for start_para in range(0, len(all_paragraphs), paras_per_split):
-            # 计算结束段落索引（不超过总段落数）
-            end_para = min(start_para + paras_per_split, len(all_paragraphs))
+        while current_para < len(all_paragraphs):
+            # 计算理论上的结束段落索引
+            target_end_para = min(current_para + paras_per_split, len(all_paragraphs))
+
+            # 如果需要保留章节完整性，调整结束段落索引
+            if preserve_chapter and chapter_para_indices:
+                # 查找目标结束段落之后的第一个章节段落
+                next_chapter_para = None
+                for chapter_para in chapter_para_indices:
+                    if chapter_para > current_para and chapter_para < target_end_para:
+                        next_chapter_para = chapter_para
+                        break
+
+                # 如果在目标范围内找到了章节段落，则在章节段落处分割
+                if next_chapter_para is not None:
+                    end_para = next_chapter_para
+                else:
+                    # 没有找到章节段落，使用原始的结束段落索引
+                    end_para = target_end_para
+            else:
+                end_para = target_end_para
 
             # 生成输出文件名
             output_path = self.file_handler.generate_output_filename(
@@ -183,7 +231,7 @@ class WordSplitter:
             new_doc = Document()
 
             # 复制原始文档的样式（简化版）
-            for i in range(start_para, end_para):
+            for i in range(current_para, end_para):
                 para = all_paragraphs[i]
                 new_para = new_doc.add_paragraph(para.text)
 
@@ -194,5 +242,70 @@ class WordSplitter:
             new_doc.save(output_path)
             output_paths.append(output_path)
             part_num += 1
+            current_para = end_para
 
         return output_paths
+
+    def split_by_equal_parts(self, input_path, parts_count, output_dir=None, preserve_chapter=False):
+        """
+        均分 Word 文件
+
+        该方法将 Word 文档平均分割为指定的份数。
+
+        Args:
+            input_path (str): 输入 Word 文件的完整路径
+            parts_count (int): 要分割的份数
+            output_dir (str, optional): 输出目录路径，默认为输入文件所在目录
+            preserve_chapter (bool, optional): 是否保留章节完整性，默认为 False
+
+        Returns:
+            list: 包含所有成功分割的文件路径的列表
+
+        Raises:
+            FileNotFoundError: 当输入文件不存在时抛出
+            ValueError: 当文件格式不正确或分割规则无效时抛出
+        """
+        # 如果未指定输出目录，则使用输入文件所在目录
+        if output_dir is None:
+            output_dir = str(Path(input_path).parent)
+
+        # 验证输入文件是否存在
+        if not os.path.exists(input_path):
+            raise FileNotFoundError(f"输入文件不存在: {input_path}")
+
+        # 验证文件是否为有效的 DOCX 格式
+        if not self.file_handler.get_file_type(input_path) == '.docx':
+            raise ValueError(f"文件不是有效的 DOCX 格式: {input_path}")
+
+        # 验证分割份数是否有效
+        if parts_count <= 0:
+            raise ValueError("分割份数必须大于 0")
+
+        # 读取 Word 文档内容
+        doc = Document(input_path)
+        full_text = []  # 存储提取的文本内容
+
+        # 提取所有段落文本
+        for paragraph in doc.paragraphs:
+            full_text.append(paragraph.text)
+
+        # 提取表格中的文本
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    full_text.append(cell.text)
+
+        # 合并所有文本，用换行符分隔
+        text_content = '\n'.join(full_text)
+        total_chars = len(text_content)
+
+        # 计算每份的字符数
+        if parts_count >= total_chars:
+            # 如果份数大于等于总字符数，每个文件至少一个字符
+            chars_per_part = 1
+        else:
+            # 计算每份的字符数，向上取整
+            chars_per_part = (total_chars + parts_count - 1) // parts_count
+
+        # 调用 split_by_chars 方法进行分割
+        return self.split_by_chars(input_path, chars_per_part, output_dir, preserve_chapter)

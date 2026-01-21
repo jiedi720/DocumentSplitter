@@ -2,7 +2,7 @@
 文件选择组件
 
 该组件提供了一个用户界面，允许用户浏览并选择要分割的文档文件。
-它包含一个选择按钮和一个显示所选文件路径的标签。
+采用上下分行布局：上为文件拖拽区域（主交互区），下为操作按钮区域（次级交互区）。
 支持点击选择和拖拽文件两种方式。
 """
 import tkinter as tk
@@ -15,8 +15,7 @@ class FileSelector(ttk.Frame):
     """文件选择组件
 
     该组件继承自ttk.Frame，提供了一个标准的文件选择界面，
-    包括一个按钮用于打开文件对话框和一个标签用于显示选中的文件路径。
-    支持点击选择和拖拽文件两种方式。
+    采用上下分行布局，视觉层级清晰，符合工程类软件设计习惯。
     """
 
     def __init__(self, parent, **kwargs):
@@ -41,42 +40,92 @@ class FileSelector(ttk.Frame):
     def create_widgets(self):
         """创建界面组件
 
-        该方法创建文件选择按钮和文件路径显示标签，
-        并将它们添加到组件中。
+        该方法创建文件拖拽区域和操作按钮区域，采用上下分行布局。
         """
-        # 创建文件选择按钮
-        self.select_button = ttk.Button(
-            self,
-            text="选择文件",
-            command=self.browse_file  # 点击按钮时调用browse_file方法
-        )
-        # 将按钮放置在左侧，并设置右边距
-        self.select_button.pack(side=tk.LEFT, padx=(0, 10))
+        # 配置网格布局权重
+        self.columnconfigure(0, weight=1)
 
+        # ========== 第一行：文件拖拽区域（主交互区）==========
         # 创建拖放区域容器（使用 tk.Frame 而不是 ttk.Frame 以支持拖放）
-        self.drop_frame = tk.Frame(self, relief=tk.SUNKEN, borderwidth=1)
-        self.drop_frame.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.drop_frame = tk.Frame(
+            self,
+            relief=tk.SUNKEN,
+            borderwidth=2,
+            height=60  # 设置固定高度，增强视觉存在感
+        )
+        self.drop_frame.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=0, pady=(0, 10))
+        self.drop_frame.grid_propagate(False)  # 防止子组件改变容器大小
 
         # 创建文件路径显示标签（也作为拖放区域）
         self.file_label = ttk.Label(
             self.drop_frame,
-            textvariable=self.selected_file_path,  # 绑定到文件路径变量
-            anchor=tk.W,  # 文本左对齐
-            padding=5
+            textvariable=self.selected_file_path,
+            anchor=tk.W,
+            padding=12,
+            font=('TkDefaultFont', 9)  # 使用稍大的字体
         )
-        # 将标签放置在左侧，并使其填充剩余空间
-        self.file_label.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.file_label.pack(fill=tk.BOTH, expand=True)
 
         # 设置默认提示文本
         if not self.selected_file_path.get():
-            self.selected_file_path.set("点击按钮选择文件，或拖拽文件到此处")
+            self.selected_file_path.set("拖拽文件到此处，或使用下方按钮选择")
+
+        # ========== 第二行：操作按钮区域（次级交互区）==========
+        # 创建按钮容器
+        button_frame = ttk.Frame(self)
+        button_frame.grid(row=1, column=0, sticky=tk.W)
+
+        # 定义按钮样式参数（保持一致性）
+        button_width = 12
+        button_padx = 5
+
+        # 创建文件选择按钮（选择新文件时会清除已选文件）
+        self.select_button = ttk.Button(
+            button_frame,
+            text="选择文件",
+            width=button_width,
+            command=self.browse_file
+        )
+        self.select_button.pack(side=tk.LEFT, padx=(0, button_padx))
+
+        # 创建增加文件按钮（在已选文件基础上增加新文件）
+        self.add_file_button = ttk.Button(
+            button_frame,
+            text="增加文件",
+            width=button_width,
+            command=self.browse_file_add
+        )
+        self.add_file_button.pack(side=tk.LEFT, padx=(0, button_padx))
+
+        # 创建选择目录按钮
+        self.select_dir_button = ttk.Button(
+            button_frame,
+            text="选择目录",
+            width=button_width,
+            command=self.browse_directory
+        )
+        self.select_dir_button.pack(side=tk.LEFT, padx=(0, button_padx))
+
+        # 创建清除文件按钮（清除当前已选文件）
+        self.clear_file_button = ttk.Button(
+            button_frame,
+            text="清除文件",
+            width=button_width,
+            command=self.clear_files
+        )
+        self.clear_file_button.pack(side=tk.LEFT)
 
     def browse_file(self):
-        """浏览并选择文件
+        """浏览并选择文件（清除已选文件）
 
         该方法打开文件对话框，让用户选择要分割的文档文件，
-        然后将选中的文件路径存储到selected_file_path变量中。
+        清除之前已选的文件，然后将新选中的文件路径存储到selected_file_path变量中。
         """
+        from tkinter import filedialog
+
+        # 获取主窗口
+        parent = self.winfo_toplevel()
+
         # 定义支持的文件类型
         filetypes = (
             ('Supported Files', '*.pdf *.docx *.txt'),
@@ -88,12 +137,12 @@ class FileSelector(ttk.Frame):
 
         # 打开文件对话框（支持多文件选择）
         filenames = filedialog.askopenfilenames(
+            parent=parent,
             title='选择要分割的文件（可多选）',
-            initialdir='/',  # 初始目录
             filetypes=filetypes  # 文件类型过滤器
         )
 
-        # 如果用户选择了文件，则更新路径变量
+        # 如果用户选择了文件，则更新路径变量（清除之前的文件）
         if filenames:
             self.selected_files = list(filenames)
             # 显示第一个文件路径，但保留所有文件在列表中
@@ -102,8 +151,108 @@ class FileSelector(ttk.Frame):
             else:
                 self.selected_file_path.set(f"已选择 {len(filenames)} 个文件")
         else:
-            self.selected_files = []
-            self.selected_file_path.set("点击按钮选择文件，或拖拽文件到此处")
+            # 用户取消了选择，保持当前状态不变
+            pass
+
+    def browse_file_add(self):
+        """浏览并增加文件（不清除已选文件）
+
+        该方法打开文件对话框，让用户选择要添加的文档文件，
+        将新选中的文件添加到已选文件列表中。
+        """
+        from tkinter import filedialog
+
+        # 获取主窗口
+        parent = self.winfo_toplevel()
+
+        # 定义支持的文件类型
+        filetypes = (
+            ('Supported Files', '*.pdf *.docx *.txt'),
+            ('PDF files', '*.pdf'),
+            ('Word files', '*.docx'),
+            ('Text files', '*.txt'),
+            ('All files', '*.*')
+        )
+
+        # 打开文件对话框（支持多文件选择）
+        filenames = filedialog.askopenfilenames(
+            parent=parent,
+            title='选择要添加的文件（可多选）',
+            filetypes=filetypes  # 文件类型过滤器
+        )
+
+        # 如果用户选择了文件，则添加到已选文件列表
+        if filenames:
+            # 添加新文件到列表中（避免重复）
+            for filename in filenames:
+                if filename not in self.selected_files:
+                    self.selected_files.append(filename)
+
+            # 更新显示
+            if len(self.selected_files) == 1:
+                self.selected_file_path.set(self.selected_files[0])
+            else:
+                self.selected_file_path.set(f"已选择 {len(self.selected_files)} 个文件")
+
+    def clear_files(self):
+        """清除所有已选文件
+
+        该方法清除当前已选的所有文件，重置为初始状态。
+        """
+        self.selected_files = []
+        self.selected_file_path.set("拖拽文件到此处，或使用下方按钮选择")
+
+    def browse_directory(self):
+        """浏览并选择目录，读取目录中所有支持的文件
+
+        该方法打开目录选择对话框，让用户选择一个目录，
+        然后读取该目录中所有支持的文件（.pdf, .docx, .txt）。
+        """
+        from tkinter import filedialog
+        import os
+
+        # 获取主窗口
+        parent = self.winfo_toplevel()
+
+        # 打开目录选择对话框
+        directory = filedialog.askdirectory(
+            parent=parent,
+            title='选择包含文件的目录'
+        )
+
+        if not directory:
+            return
+
+        # 支持的文件扩展名
+        supported_extensions = ['.pdf', '.docx', '.txt']
+
+        # 扫描目录中的所有文件
+        valid_files = []
+        try:
+            for filename in os.listdir(directory):
+                file_path = os.path.join(directory, filename)
+                # 只处理文件，不处理子目录
+                if os.path.isfile(file_path):
+                    # 检查文件扩展名
+                    file_ext = os.path.splitext(filename)[1].lower()
+                    if file_ext in supported_extensions:
+                        valid_files.append(file_path)
+        except Exception as e:
+            return
+
+        # 更新文件列表（清除之前的文件）
+        if valid_files:
+            self.selected_files = valid_files
+            # 按文件名排序
+            self.selected_files.sort()
+
+            # 更新显示
+            if len(self.selected_files) == 1:
+                self.selected_file_path.set(self.selected_files[0])
+            else:
+                self.selected_file_path.set(f"已选择 {len(self.selected_files)} 个文件")
+        else:
+            self.selected_file_path.set("目录中没有支持的文件")
 
     def get_selected_file(self):
         """获取选中的文件路径
@@ -145,26 +294,18 @@ class FileSelector(ttk.Frame):
             # 获取根窗口
             root = self.winfo_toplevel()
 
-            # 直接尝试注册拖放事件，不进行属性检查
-            print("正在注册拖放事件...")
-
             # 为拖放区域注册拖放事件
             self.drop_frame.drop_target_register(DND_FILES)
             self.drop_frame.dnd_bind('<<Drop>>', self.on_drop)
             self.drop_frame.dnd_bind('<<DragEnter>>', self.on_drag_enter)
             self.drop_frame.dnd_bind('<<DragLeave>>', self.on_drag_leave)
 
-            print("拖放事件注册成功")
-
         except ImportError:
             # tkinterdnd2 未安装，拖放功能不可用
-            print("提示：安装 tkinterdnd2 库可启用拖拽文件功能")
-            print("安装命令：pip install tkinterdnd2")
+            pass
         except Exception as e:
             # 其他错误，不影响主功能
-            print(f"拖放功能初始化失败：{e}")
-            import traceback
-            traceback.print_exc()
+            pass
 
     def on_drag_enter(self, event):
         """拖拽进入时的视觉反馈
@@ -191,39 +332,38 @@ class FileSelector(ttk.Frame):
         # 获取拖放的文件路径
         files = event.data
 
-        print(f"原始文件路径: {files}")
-
         # 处理 Windows 路径格式（可能包含花括号或引号）
         if isinstance(files, str):
-            # 移除可能的花括号
-            if files.startswith('{') and files.endswith('}'):
-                files = files[1:-1]
             # 移除可能的引号
             files = files.strip('"\'')
 
         # 分割多个文件（如果用户拖放了多个）
-        # 对于Windows，有时路径中包含空格，需要更智能地处理
+        # 对于Windows，多个文件路径通常被花括号包围，格式为 {路径1} {路径2}
         import re
-        # 更智能地处理文件路径，特别是包含空格的路径
-        # 首先尝试匹配用引号包围的路径
-        quoted_paths = re.findall(r'"([^"]*)"|\'([^\']*)\'', files)
-        if quoted_paths:
-            # 如果找到引号包围的路径，使用这些路径
-            file_list = [match[0] or match[1] for match in quoted_paths if match[0] or match[1]]
+        # 匹配花括号包围的路径
+        bracket_paths = re.findall(r'\{([^}]*)\}', files)
+        
+        if bracket_paths:
+            # 如果找到花括号包围的路径，使用这些路径
+            file_list = bracket_paths
         else:
-            # 如果没有引号包围的路径，对于Windows拖拽，通常整个路径被花括号包围作为一个整体
-            # 或者路径中包含空格但没有引号，我们需要特殊处理这种情况
-            files_stripped = files.strip('{}')  # 移除最外层的花括号
-
-            # 如果路径包含常见的文件扩展名且有空格，很可能这是一个带空格的完整路径
-            if any(ext in files_stripped.lower() for ext in ['.pdf', '.docx', '.txt']):
-                # 假设整个（去除花括号后）的字符串是一个路径
-                file_list = [files_stripped]
+            # 尝试匹配用引号包围的路径
+            quoted_paths = re.findall(r'"([^"]*)"|\'([^\']*)\'', files)
+            if quoted_paths:
+                # 如果找到引号包围的路径，使用这些路径
+                file_list = [match[0] or match[1] for match in quoted_paths if match[0] or match[1]]
             else:
-                # 否则按空格分割
-                file_list = files_stripped.split()
+                # 如果没有引号包围的路径，对于Windows拖拽，通常整个路径被花括号包围作为一个整体
+                # 或者路径中包含空格但没有引号，我们需要特殊处理这种情况
+                files_stripped = files.strip('{}')  # 移除最外层的花括号
 
-        print(f"文件列表: {file_list}")
+                # 如果路径包含常见的文件扩展名且有空格，很可能这是一个带空格的完整路径
+                if any(ext in files_stripped.lower() for ext in ['.pdf', '.docx', '.txt']):
+                    # 假设整个（去除花括号后）的字符串是一个路径
+                    file_list = [files_stripped]
+                else:
+                    # 否则按空格分割
+                    file_list = files_stripped.split()
 
         # 处理所有文件
         valid_files = []
@@ -235,15 +375,11 @@ class FileSelector(ttk.Frame):
             if not file_path:
                 continue
 
-            print(f"处理文件路径: {file_path}")
-
             # 尝试规范化路径
             try:
                 normalized_path = Path(file_path).resolve()
                 file_path = str(normalized_path)
-                print(f"规范化后的路径: {file_path}")
             except Exception as e:
-                print(f"路径规范化失败: {e}")
                 continue
 
             # 验证文件是否存在
@@ -256,24 +392,20 @@ class FileSelector(ttk.Frame):
                     valid_files.append(file_path)
                 else:
                     unsupported_files.append(file_path)
-                    print(f"不支持的文件类型: {file_path}")
             else:
                 # 文件不存在 - 尝试多种路径格式
-                print(f"文件不存在: {file_path}")
-
                 # 尝试解码可能的URL编码路径
                 import urllib.parse
                 decoded_path = urllib.parse.unquote(file_path)
-                    if Path(decoded_path).exists():
-                        print(f"解码后的路径存在: {decoded_path}")
-                        file_ext = Path(decoded_path).suffix.lower()
-                        supported_extensions = ['.pdf', '.docx', '.txt']
-                        if file_ext in supported_extensions:
-                            valid_files.append(decoded_path)
-                        else:
-                            unsupported_files.append(decoded_path)
+                if Path(decoded_path).exists():
+                    file_ext = Path(decoded_path).suffix.lower()
+                    supported_extensions = ['.pdf', '.docx', '.txt']
+                    if file_ext in supported_extensions:
+                        valid_files.append(decoded_path)
+                    else:
+                        unsupported_files.append(decoded_path)
 
-        # 更新文件列表
+        # 更新文件列表（清除之前的文件）
         self.selected_files = valid_files
 
         # 更新显示
@@ -283,10 +415,6 @@ class FileSelector(ttk.Frame):
             self.selected_file_path.set(valid_files[0])
         else:
             self.selected_file_path.set(f"已选择 {len(valid_files)} 个文件")
-
-        # 触发变量变化事件，通知主窗口
-        if hasattr(self.selected_file_path, 'trace_add'):
-            self.selected_file_path.trace_add('write', lambda *args: None)
 
         # 恢复默认样式
         self.drop_frame.config(background="")

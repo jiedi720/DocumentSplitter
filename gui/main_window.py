@@ -29,6 +29,7 @@ from function.pdf_splitter import PDFSplitter
 from function.word_splitter import WordSplitter
 from function.txt_splitter import TxtSplitter
 from function.document_analyzer import DocumentAnalyzer
+from function.config import ConfigManager
 
 
 class MainApplication:
@@ -48,15 +49,12 @@ class MainApplication:
         try:
             from tkinterdnd2 import TkinterDnD
             self.root = TkinterDnD.Tk()
-            print("使用 TkinterDnD.Tk() 创建窗口，支持拖放功能")
         except ImportError:
             # 如果 tkinterdnd2 不可用，使用普通 Tk
             self.root = tk.Tk()
-            print("使用普通 tk.Tk() 创建窗口，不支持拖放功能")
         except Exception as e:
             # 其他错误，使用普通 Tk
             self.root = tk.Tk()
-            print(f"创建 TkinterDnD 窗口失败：{e}，使用普通窗口")
 
         # 先隐藏窗口，避免显示时的闪烁
         self.root.withdraw()  # 暂时隐藏窗口
@@ -66,7 +64,11 @@ class MainApplication:
 
         # 设置窗口标题和尺寸
         self.root.title("DocumentSplitter")  # 设置窗口标题
-        self.root.geometry("800x600")
+        self.root.geometry("450x550")
+        # 设置最小宽度，确保所有按钮都能完整显示
+        self.root.minsize(450, 450)
+        # 设置最大宽度，锁定为 450
+        self.root.maxsize(450, 9999)
 
         # 初始化功能模块
         self.file_handler = FileHandler()
@@ -74,12 +76,24 @@ class MainApplication:
         self.word_splitter = WordSplitter()
         self.txt_splitter = TxtSplitter()
         self.document_analyzer = DocumentAnalyzer()
+        
+        # 初始化配置管理器
+        self.config_manager = ConfigManager()
 
         # 当前选中的文件路径
         self.current_file_path = ""
 
+        # 分析结果窗口实例（确保同时只能打开一个）
+        self.analysis_result_window = None
+
         # 创建所有界面组件
         self.create_widgets()
+        
+        # 加载配置
+        self.load_config()
+        
+        # 绑定窗口关闭事件
+        self.root.protocol("WM_DELETE_WINDOW", self.on_window_close)
 
         # 计算并设置窗口居中位置
         self.center_window()
@@ -116,15 +130,15 @@ class MainApplication:
         self.file_selector.grid(row=0, column=0, sticky=(tk.W, tk.E))
 
         # 绑定文件选择变化事件，当文件路径改变时触发回调
-        self.file_selector.selected_file_path.trace('w', self.on_file_selected)
+        self.file_selector.selected_file_path.trace_add('write', self.on_file_selected)
 
         # 设置面板
         self.settings_panel = SettingsPanel(main_frame)
-        self.settings_panel.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        self.settings_panel.grid(row=1, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 5))
 
         # 进度显示区域
-        progress_frame = ttk.LabelFrame(main_frame, text="进度", padding="10")
-        progress_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(0, 10))
+        progress_frame = ttk.Frame(main_frame, padding="10")
+        progress_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(5, 5))
         progress_frame.columnconfigure(0, weight=1)
 
         # 进度信息变量和标签
@@ -142,7 +156,7 @@ class MainApplication:
 
         # 按钮区域
         button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=3, column=0, columnspan=2, pady=(10, 0))
+        button_frame.grid(row=3, column=0, columnspan=2, pady=(5, 0))
 
         # 开始分割按钮
         self.split_button = ttk.Button(
@@ -172,19 +186,42 @@ class MainApplication:
         self.cancel_button.pack(side=tk.LEFT)
 
         # 日志显示区域
-        log_frame = ttk.LabelFrame(main_frame, text="操作日志", padding="5")
-        log_frame.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(10, 0))
-        log_frame.columnconfigure(0, weight=1)
-        log_frame.rowconfigure(0, weight=1)
-        main_frame.rowconfigure(4, weight=1)
+        # 创建日志标题栏（包含折叠按钮）
+        log_header = ttk.Frame(main_frame)
+        log_header.grid(row=4, column=0, columnspan=2, sticky=tk.W, pady=(10, 0))
+
+        ttk.Label(log_header, text="操作日志", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT)
+
+        # 日志展开/折叠状态
+        self.log_expanded = tk.BooleanVar(value=True)
+
+        # 展开/折叠按钮
+        self.log_toggle_button = ttk.Button(
+            log_header,
+            text="▲",
+            width=3,
+            command=self.toggle_log,
+            style='Toolbutton'
+        )
+        self.log_toggle_button.pack(side=tk.LEFT, padx=(10, 0))
+
+        # 日志内容框架
+        self.log_frame = ttk.Frame(main_frame)
+        self.log_frame.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E, tk.N, tk.S), pady=(5, 0))
+        self.log_frame.columnconfigure(0, weight=1)
+        self.log_frame.rowconfigure(0, weight=1)
+        main_frame.rowconfigure(5, weight=1)
 
         # 创建文本框和滚动条
-        self.log_text = tk.Text(log_frame, height=8, wrap=tk.WORD)
-        scrollbar = ttk.Scrollbar(log_frame, orient=tk.VERTICAL, command=self.log_text.yview)
+        self.log_text = tk.Text(self.log_frame, height=8, wrap=tk.WORD)
+        scrollbar = ttk.Scrollbar(self.log_frame, orient=tk.VERTICAL, command=self.log_text.yview)
         self.log_text.configure(yscrollcommand=scrollbar.set)
 
         self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
         scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+
+        # 绑定右键菜单
+        self.create_log_context_menu()
 
         # 操作状态标志
         self.operation_cancelled = False
@@ -219,8 +256,12 @@ class MainApplication:
                     if file_type == '.pdf':
                         self.settings_panel.set_mode_state(tk.NORMAL)
                     else:
-                        self.settings_panel.mode_var.set("chars")
-                        self.settings_panel.set_mode_state(tk.DISABLED)
+                        # 对于非 PDF 文件，允许选择 "chars" 和 "equal" 模式，但禁用 "pages" 模式
+                        current_mode = self.settings_panel.mode_var.get()
+                        if current_mode not in ["chars", "equal"]:
+                            self.settings_panel.mode_var.set("chars")
+                        # 只禁用 "pages" 模式，因为非 PDF 文件不支持
+                        self.settings_panel.set_mode_state(tk.NORMAL, disable_pages=True)
 
                     # 设置默认输出路径为文件所在目录
                     default_output = str(Path(file_path).parent)
@@ -248,6 +289,14 @@ class MainApplication:
         该方法在用户点击"分析文档"按钮后被调用，
         分析当前选中的文档（支持多个）并显示元数据信息。
         """
+        # 如果已存在分析结果窗口，先关闭它
+        if self.analysis_result_window is not None:
+            try:
+                self.analysis_result_window.window.destroy()
+            except:
+                pass
+            self.analysis_result_window = None
+
         # 获取选中的所有文件
         selected_files = self.file_selector.get_selected_files()
 
@@ -261,13 +310,21 @@ class MainApplication:
             results = self.document_analyzer.analyze_files(selected_files)
 
             # 显示分析结果
-            AnalysisResultWindow(self.root, results)
+            self.analysis_result_window = AnalysisResultWindow(
+                self.root,
+                results,
+                on_close=self.on_analysis_window_closed
+            )
             self.log_message(f"文档分析完成，共分析 {len(results)} 个文件")
 
         except Exception as e:
             error_msg = f"文档分析失败: {str(e)}"
             self.log_message(error_msg)
             messagebox.showerror("错误", error_msg)
+
+    def on_analysis_window_closed(self):
+        """分析结果窗口关闭时的回调"""
+        self.analysis_result_window = None
 
     def start_splitting(self):
         """开始分割文档
@@ -321,38 +378,80 @@ class MainApplication:
             if not file_type:
                 raise ValueError(f"不支持的文件格式: {file_path}")
 
+            # 如果输出路径未设置，使用原文件所在目录
+            if not settings['output_path']:
+                import os
+                settings['output_path'] = os.path.dirname(file_path)
+
             # 根据文件类型和设置执行相应的分割方法
             output_files = []
 
             if file_type == '.pdf':
                 if settings['mode'] == 'pages':
-                    self.log_message(f"开始按页数分割 PDF 文件，每份 {settings['value']} 页")
+                    self.log_message(f"开始按页数分割 PDF 文件，每份 {settings['value']} 页" +
+                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
                     output_files = self.pdf_splitter.split_by_pages(
                         file_path,
                         settings['value'],
-                        settings['output_path']
+                        settings['output_path'],
+                        settings.get('preserve_chapter', False)
                     )
                 elif settings['mode'] == 'chars':
-                    self.log_message(f"开始按字符数分割 PDF 文件，每份 {settings['value']} 字符")
+                    self.log_message(f"开始按字符数分割 PDF 文件，每份 {settings['value']} 字符" +
+                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
                     output_files = self.pdf_splitter.split_by_chars(
                         file_path,
                         settings['value'],
-                        settings['output_path']
+                        settings['output_path'],
+                        settings.get('preserve_chapter', False)
+                    )
+                elif settings['mode'] == 'equal':
+                    self.log_message(f"开始均分 PDF 文件，共分割为 {settings['value']} 份" +
+                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
+                    output_files = self.pdf_splitter.split_by_equal_parts(
+                        file_path,
+                        settings['value'],
+                        settings['output_path'],
+                        settings.get('preserve_chapter', False)
                     )
             elif file_type == '.docx':
-                self.log_message(f"开始按字符数分割 Word 文件，每份 {settings['value']} 字符")
-                output_files = self.word_splitter.split_by_chars(
-                    file_path,
-                    settings['value'],
-                    settings['output_path']
-                )
+                if settings['mode'] == 'equal':
+                    self.log_message(f"开始均分 Word 文件，共分割为 {settings['value']} 份" +
+                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
+                    output_files = self.word_splitter.split_by_equal_parts(
+                        file_path,
+                        settings['value'],
+                        settings['output_path'],
+                        settings.get('preserve_chapter', False)
+                    )
+                else:  # 默认按字符数分割
+                    self.log_message(f"开始按字符数分割 Word 文件，每份 {settings['value']} 字符" +
+                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
+                    output_files = self.word_splitter.split_by_chars(
+                        file_path,
+                        settings['value'],
+                        settings['output_path'],
+                        settings.get('preserve_chapter', False)
+                    )
             elif file_type == '.txt':
-                self.log_message(f"开始按字符数分割 TXT 文件，每份 {settings['value']} 字符")
-                output_files = self.txt_splitter.split_by_chars(
-                    file_path,
-                    settings['value'],
-                    settings['output_path']
-                )
+                if settings['mode'] == 'equal':
+                    self.log_message(f"开始均分 TXT 文件，共分割为 {settings['value']} 份" +
+                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
+                    output_files = self.txt_splitter.split_by_equal_parts(
+                        file_path,
+                        settings['value'],
+                        settings['output_path'],
+                        settings.get('preserve_chapter', False)
+                    )
+                else:  # 默认按字符数分割
+                    self.log_message(f"开始按字符数分割 TXT 文件，每份 {settings['value']} 字符" +
+                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
+                    output_files = self.txt_splitter.split_by_chars(
+                        file_path,
+                        settings['value'],
+                        settings['output_path'],
+                        settings.get('preserve_chapter', False)
+                    )
 
             # 检查操作是否被用户取消
             if self.operation_cancelled:
@@ -447,6 +546,102 @@ class MainApplication:
         # 更新界面
         self.root.update_idletasks()
 
+    def create_log_context_menu(self):
+        """创建日志文本框的右键菜单
+
+        该方法为日志文本框创建右键菜单，包含全选、复制、粘贴、分割线和清除等选项。
+        """
+        # 创建右键菜单
+        self.log_context_menu = tk.Menu(self.root, tearoff=0)
+
+        # 添加菜单项
+        self.log_context_menu.add_command(
+            label="全选",
+            command=self.log_select_all,
+            accelerator="Ctrl+A"
+        )
+        self.log_context_menu.add_command(
+            label="复制",
+            command=self.log_copy,
+            accelerator="Ctrl+C"
+        )
+        self.log_context_menu.add_command(
+            label="粘贴",
+            command=self.log_paste,
+            accelerator="Ctrl+V"
+        )
+        self.log_context_menu.add_separator()  # 分割线
+        self.log_context_menu.add_command(
+            label="清除",
+            command=self.log_clear
+        )
+
+        # 绑定右键点击事件
+        self.log_text.bind("<Button-3>", self.show_log_context_menu)
+        self.log_text.bind("<Button-2>", self.show_log_context_menu)  # macOS 右键
+
+        # 绑定快捷键
+        self.log_text.bind("<Control-a>", lambda e: self.log_select_all())
+        self.log_text.bind("<Control-A>", lambda e: self.log_select_all())
+        self.log_text.bind("<Control-c>", lambda e: self.log_copy())
+        self.log_text.bind("<Control-C>", lambda e: self.log_copy())
+        self.log_text.bind("<Control-v>", lambda e: self.log_paste())
+        self.log_text.bind("<Control-V>", lambda e: self.log_paste())
+
+    def show_log_context_menu(self, event):
+        """显示右键菜单
+
+        Args:
+            event: 鼠标事件对象
+        """
+        # 确保文本框有焦点
+        self.log_text.focus_set()
+
+        # 显示菜单
+        self.log_context_menu.post(event.x_root, event.y_root)
+
+    def toggle_log(self):
+        """切换日志区域的展开/折叠状态"""
+        self.log_expanded.set(not self.log_expanded.get())
+
+        if self.log_expanded.get():
+            self.log_frame.grid()
+            self.log_toggle_button.config(text="▲")
+        else:
+            self.log_frame.grid_remove()
+            self.log_toggle_button.config(text="▼")
+
+    def log_select_all(self):
+        """全选日志文本"""
+        self.log_text.tag_add("sel", "1.0", "end")
+
+    def log_copy(self):
+        """复制选中的日志文本"""
+        try:
+            # 获取选中的文本
+            selected_text = self.log_text.get("sel.first", "sel.last")
+            # 复制到剪贴板
+            self.root.clipboard_clear()
+            self.root.clipboard_append(selected_text)
+        except tk.TclError:
+            # 没有选中文本
+            pass
+
+    def log_paste(self):
+        """粘贴剪贴板内容到日志文本"""
+        try:
+            # 获取剪贴板内容
+            clipboard_text = self.root.clipboard_get()
+            # 在当前光标位置插入
+            self.log_text.insert(tk.INSERT, clipboard_text)
+        except tk.TclError:
+            # 剪贴板为空或不可用
+            pass
+
+    def log_clear(self):
+        """清除所有日志文本"""
+        self.log_text.delete("1.0", "end")
+
     def setup_window_icon(self):
         """设置窗口图标
 
@@ -490,6 +685,89 @@ class MainApplication:
 
         # 设置窗口位置
         self.root.geometry(f"{width}x{height}+{x}+{y}")
+
+    def load_config(self):
+        """加载配置
+
+        该方法从配置文件中加载保存的设置，并应用到界面上。
+        """
+        try:
+            # 读取配置
+            config = self.config_manager.read_config()
+            
+            # 应用分割设置
+            if "SplitSettings" in config:
+                split_settings = config["SplitSettings"]
+                # 设置模式
+                if "mode" in split_settings:
+                    self.settings_panel.mode_var.set(split_settings["mode"])
+                # 设置字数分割值
+                if "chars_value" in split_settings:
+                    self.settings_panel.chars_var.set(split_settings["chars_value"])
+                # 设置页数分割值
+                if "pages_value" in split_settings:
+                    self.settings_panel.pages_var.set(split_settings["pages_value"])
+                # 设置均分份数
+                if "equal_value" in split_settings:
+                    self.settings_panel.equal_var.set(split_settings["equal_value"])
+                # 设置保留章节完整性
+                if "preserve_chapter" in split_settings:
+                    self.settings_panel.preserve_chapter_var.set(split_settings["preserve_chapter"])
+            
+            # 应用路径设置
+            if "Paths" in config:
+                paths_settings = config["Paths"]
+                # 设置输出路径
+                if "output_dir" in paths_settings and paths_settings["output_dir"]:
+                    self.settings_panel.output_path_var.set(paths_settings["output_dir"])
+                    
+        except Exception as e:
+            print(f"加载配置失败: {e}")
+
+    def save_config(self):
+        """保存配置
+
+        该方法将当前界面上的设置保存到配置文件中。
+        """
+        try:
+            # 获取输入目录
+            input_dir = ""
+            selected_files = self.file_selector.get_selected_files()
+            if selected_files:
+                from pathlib import Path
+                input_dir = str(Path(selected_files[0]).parent)
+            
+            # 构建配置字典 - 按照指定顺序
+            config = {
+                "SplitSettings": {
+                    "mode": self.settings_panel.mode_var.get(),
+                    "preserve_chapter": self.settings_panel.preserve_chapter_var.get(),
+                    "chars_value": self.settings_panel.chars_var.get(),
+                    "pages_value": self.settings_panel.pages_var.get(),
+                    "equal_value": self.settings_panel.equal_var.get()
+                },
+                "Paths": {
+                    "input_dir": input_dir,
+                    "output_dir": self.settings_panel.output_path_var.get()
+                }
+            }
+            
+            # 保存配置
+            self.config_manager.save_config(config)
+            
+        except Exception as e:
+            print(f"保存配置失败: {e}")
+
+    def on_window_close(self):
+        """窗口关闭事件处理
+
+        该方法在窗口关闭时被调用，保存配置并退出应用程序。
+        """
+        # 保存配置
+        self.save_config()
+        
+        # 退出应用程序
+        self.root.destroy()
 
     def run(self):
         """运行应用程序
