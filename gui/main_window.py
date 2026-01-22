@@ -28,6 +28,7 @@ from function.file_handler import FileHandler
 from function.pdf_splitter import PDFSplitter
 from function.word_splitter import WordSplitter
 from function.txt_splitter import TxtSplitter
+from function.md_splitter import MdSplitter
 from function.document_analyzer import DocumentAnalyzer
 from function.config import ConfigManager
 
@@ -75,6 +76,7 @@ class MainApplication:
         self.pdf_splitter = PDFSplitter()
         self.word_splitter = WordSplitter()
         self.txt_splitter = TxtSplitter()
+        self.md_splitter = MdSplitter()
         self.document_analyzer = DocumentAnalyzer()
         
         # 初始化配置管理器
@@ -447,6 +449,25 @@ class MainApplication:
                     self.log_message(f"开始按字符数分割 TXT 文件，每份 {settings['value']} 字符" +
                                     ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
                     output_files = self.txt_splitter.split_by_chars(
+                        file_path,
+                        settings['value'],
+                        settings['output_path'],
+                        settings.get('preserve_chapter', False)
+                    )
+            elif file_type == '.md':
+                if settings['mode'] == 'equal':
+                    self.log_message(f"开始均分 Markdown 文件，共分割为 {settings['value']} 份" +
+                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
+                    output_files = self.md_splitter.split_by_equal_parts(
+                        file_path,
+                        settings['value'],
+                        settings['output_path'],
+                        settings.get('preserve_chapter', False)
+                    )
+                else:  # 默认按字符数分割
+                    self.log_message(f"开始按字符数分割 Markdown 文件，每份 {settings['value']} 字符" +
+                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
+                    output_files = self.md_splitter.split_by_chars(
                         file_path,
                         settings['value'],
                         settings['output_path'],

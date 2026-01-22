@@ -135,10 +135,11 @@ class FileSelector(ttk.Frame):
 
         # 定义支持的文件类型
         filetypes = (
-            ('Supported Files', '*.pdf *.docx *.txt'),
+            ('Supported Files', '*.pdf *.docx *.txt *.md'),
             ('PDF files', '*.pdf'),
             ('Word files', '*.docx'),
             ('Text files', '*.txt'),
+            ('Markdown files', '*.md'),
             ('All files', '*.*')
         )
 
@@ -174,10 +175,11 @@ class FileSelector(ttk.Frame):
 
         # 定义支持的文件类型
         filetypes = (
-            ('Supported Files', '*.pdf *.docx *.txt'),
+            ('Supported Files', '*.pdf *.docx *.txt *.md'),
             ('PDF files', '*.pdf'),
             ('Word files', '*.docx'),
             ('Text files', '*.txt'),
+            ('Markdown files', '*.md'),
             ('All files', '*.*')
         )
 
@@ -238,7 +240,7 @@ class FileSelector(ttk.Frame):
         self.save_input_directory(directory)
 
         # 支持的文件扩展名
-        supported_extensions = ['.pdf', '.docx', '.txt']
+        supported_extensions = ['.pdf', '.docx', '.txt', '.md']
 
         # 扫描目录中的所有文件
         valid_files = []
@@ -425,7 +427,7 @@ class FileSelector(ttk.Frame):
             if Path(file_path).exists():
                 # 验证文件类型
                 file_ext = Path(file_path).suffix.lower()
-                supported_extensions = ['.pdf', '.docx', '.txt']
+                supported_extensions = ['.pdf', '.docx', '.txt', '.md']
 
                 if file_ext in supported_extensions:
                     valid_files.append(file_path)
@@ -438,7 +440,7 @@ class FileSelector(ttk.Frame):
                 decoded_path = urllib.parse.unquote(file_path)
                 if Path(decoded_path).exists():
                     file_ext = Path(decoded_path).suffix.lower()
-                    supported_extensions = ['.pdf', '.docx', '.txt']
+                    supported_extensions = ['.pdf', '.docx', '.txt', '.md']
                     if file_ext in supported_extensions:
                         valid_files.append(decoded_path)
                     else:

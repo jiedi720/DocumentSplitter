@@ -12,7 +12,7 @@ class FileHandler:
     """文件处理器，用于识别文件类型和验证分割规则"""
 
     # 支持的文件格式列表
-    SUPPORTED_FORMATS = ['.pdf', '.docx', '.txt']
+    SUPPORTED_FORMATS = ['.pdf', '.docx', '.txt', '.md']
 
     def __init__(self):
         """初始化文件处理器"""
@@ -60,7 +60,7 @@ class FileHandler:
         if file_type in ['.pdf']:
             # PDF 文件的最小分割单位是1页
             return value >= 1
-        elif file_type in ['.docx', '.txt']:
+        elif file_type in ['.docx', '.txt', '.md']:
             # 文本文件的最小分割单位是1个字符
             return value >= 1
 
