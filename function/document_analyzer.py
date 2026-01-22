@@ -54,7 +54,7 @@ class DocumentAnalyzer:
                 result = self._analyze_pdf(path)
             elif file_ext == '.docx':
                 result = self._analyze_docx(path)
-            elif file_ext == '.txt':
+            elif file_ext == '.txt' or file_ext == '.md' or file_ext == '.srt':
                 result = self._analyze_txt(path)
             else:
                 result = {
