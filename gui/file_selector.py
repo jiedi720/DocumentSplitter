@@ -9,6 +9,7 @@ import tkinter as tk
 from tkinter import filedialog
 from tkinter import ttk
 from pathlib import Path
+import os
 
 
 class FileSelector(ttk.Frame):
@@ -218,7 +219,6 @@ class FileSelector(ttk.Frame):
         然后读取该目录中所有支持的文件（.pdf, .docx, .txt）。
         """
         from tkinter import filedialog
-        import os
 
         # 获取主窗口
         parent = self.winfo_toplevel()
