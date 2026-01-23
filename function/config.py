@@ -25,10 +25,10 @@ class ConfigManager:
         if hasattr(sys, '_MEIPASS'):
             # 打包后环境：使用可执行文件所在目录
             exe_dir = Path(sys.executable).parent
-            self.config_path = exe_dir / "DocumentSplitter.ini"
+            self.config_path = exe_dir / "DocuSplitter.ini"
         else:
             # 开发环境：使用项目根目录
-            self.config_path = Path(__file__).resolve().parents[1] / "DocumentSplitter.ini"
+            self.config_path = Path(__file__).resolve().parents[1] / "DocuSplitter.ini"
 
         # 初始化配置解析器
         self.config = configparser.ConfigParser()

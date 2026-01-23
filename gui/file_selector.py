@@ -377,22 +377,21 @@ class FileSelector(ttk.Frame):
         if isinstance(files, str):
             # 移除可能的引号
             files = files.strip('"\'')
-
         # 分割多个文件（如果用户拖放了多个）
         # 对于Windows，多个文件路径通常被花括号包围，格式为 {路径1} {路径2}
         import re
         # 匹配花括号包围的路径
         bracket_paths = re.findall(r'\{([^}]*)\}', files)
-        
+
         if bracket_paths:
             # 如果找到花括号包围的路径，使用这些路径
-            file_list = bracket_paths
+            path_list = bracket_paths
         else:
             # 尝试匹配用引号包围的路径
             quoted_paths = re.findall(r'"([^"]*)"|\'([^\']*)\'', files)
             if quoted_paths:
                 # 如果找到引号包围的路径，使用这些路径
-                file_list = [match[0] or match[1] for match in quoted_paths if match[0] or match[1]]
+                path_list = [match[0] or match[1] for match in quoted_paths if match[0] or match[1]]
             else:
                 # 如果没有引号包围的路径，对于Windows拖拽，通常整个路径被花括号包围作为一个整体
                 # 或者路径中包含空格但没有引号，我们需要特殊处理这种情况
@@ -401,57 +400,72 @@ class FileSelector(ttk.Frame):
                 # 如果路径包含常见的文件扩展名且有空格，很可能这是一个带空格的完整路径
                 if any(ext in files_stripped.lower() for ext in ['.pdf', '.docx', '.txt']):
                     # 假设整个（去除花括号后）的字符串是一个路径
-                    file_list = [files_stripped]
+                    path_list = [files_stripped]
                 else:
                     # 否则按空格分割
-                    file_list = files_stripped.split()
+                    path_list = files_stripped.split()
 
-        # 处理所有文件
+        # 处理所有路径（可能是文件或文件夹）
         valid_files = []
-        unsupported_files = []
+        unsupported_items = []
 
-        for file_path in file_list:
-            file_path = file_path.strip()
+        for path in path_list:
+            path = path.strip()
 
-            if not file_path:
+            if not path:
                 continue
 
             # 尝试规范化路径
             try:
-                normalized_path = Path(file_path).resolve()
-                file_path = str(normalized_path)
+                normalized_path = Path(path).resolve()
+                path = str(normalized_path)
             except Exception as e:
                 continue
 
-            # 验证文件是否存在
-            if Path(file_path).exists():
-                # 验证文件类型
-                file_ext = Path(file_path).suffix.lower()
-                supported_extensions = ['.pdf', '.docx', '.txt', '.md']
-
-                if file_ext in supported_extensions:
-                    valid_files.append(file_path)
-                else:
-                    unsupported_files.append(file_path)
-            else:
-                # 文件不存在 - 尝试多种路径格式
-                # 尝试解码可能的URL编码路径
-                import urllib.parse
-                decoded_path = urllib.parse.unquote(file_path)
-                if Path(decoded_path).exists():
-                    file_ext = Path(decoded_path).suffix.lower()
+            # 检查路径是否存在
+            if Path(path).exists():
+                if Path(path).is_file():
+                    # 如果是文件，验证文件类型
+                    file_ext = Path(path).suffix.lower()
                     supported_extensions = ['.pdf', '.docx', '.txt', '.md']
+
                     if file_ext in supported_extensions:
-                        valid_files.append(decoded_path)
+                        valid_files.append(path)
                     else:
-                        unsupported_files.append(decoded_path)
+                        unsupported_items.append(path)
+                elif Path(path).is_dir():
+                    # 如果是目录，扫描目录中的所有支持的文件
+                    dir_valid_files = self.scan_directory_for_supported_files(path)
+                    valid_files.extend(dir_valid_files)
+                else:
+                    # 其他类型（不太可能）
+                    unsupported_items.append(path)
+            else:
+                # 路径不存在 - 尝试多种路径格式
+                import urllib.parse
+                decoded_path = urllib.parse.unquote(path)
+                if Path(decoded_path).exists():
+                    if Path(decoded_path).is_file():
+                        file_ext = Path(decoded_path).suffix.lower()
+                        supported_extensions = ['.pdf', '.docx', '.txt', '.md']
+                        if file_ext in supported_extensions:
+                            valid_files.append(decoded_path)
+                        else:
+                            unsupported_items.append(decoded_path)
+                    elif Path(decoded_path).is_dir():
+                        # 如果是目录，扫描目录中的所有支持的文件
+                        dir_valid_files = self.scan_directory_for_supported_files(decoded_path)
+                        valid_files.extend(dir_valid_files)
 
         # 更新文件列表（清除之前的文件）
         self.selected_files = valid_files
 
         # 更新显示
         if len(valid_files) == 0:
-            self.selected_file_path.set("拖拽的文件无效或不支持")
+            if len(unsupported_items) > 0:
+                self.selected_file_path.set("拖拽的文件/文件夹无效或不支持")
+            else:
+                self.selected_file_path.set("拖拽的文件/文件夹不存在")
         elif len(valid_files) == 1:
             self.selected_file_path.set(valid_files[0])
         else:
@@ -459,3 +473,30 @@ class FileSelector(ttk.Frame):
 
         # 恢复默认样式
         self.drop_frame.config(background="")
+
+    def scan_directory_for_supported_files(self, directory):
+        """扫描目录中所有支持的文件
+
+        Args:
+            directory (str): 目录路径
+
+        Returns:
+            list: 支持的文件路径列表
+        """
+        supported_extensions = ['.pdf', '.docx', '.txt', '.md']
+        valid_files = []
+
+        try:
+            for filename in os.listdir(directory):
+                file_path = os.path.join(directory, filename)
+                # 只处理文件，不处理子目录
+                if os.path.isfile(file_path):
+                    # 检查文件扩展名
+                    file_ext = os.path.splitext(filename)[1].lower()
+                    if file_ext in supported_extensions:
+                        valid_files.append(file_path)
+        except Exception as e:
+            # 如果目录无法访问，返回空列表
+            pass
+
+        return valid_files

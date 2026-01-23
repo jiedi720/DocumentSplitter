@@ -1,8 +1,8 @@
-# DocumentSplitter - 文档分割与分析工具
+# DocuSplitter - 文档分割与分析工具
 
 ## 项目简介
 
-DocumentSplitter 是一个基于 Python 和 Tkinter 的现代化桌面应用程序，提供专业的文档分割和分析功能。该工具支持多种文档格式，具备智能章节识别、批量处理和丰富的用户交互功能，适用于需要高效处理大量文档的场景。
+DocuSplitter 是一个基于 Python 和 Tkinter 的现代化桌面应用程序，提供专业的文档分割和分析功能。该工具支持多种文档格式，具备智能章节识别、批量处理和丰富的用户交互功能，适用于需要高效处理大量文档的场景。
 
 ## 核心功能
 
@@ -77,8 +77,8 @@ DocumentSplitter 是一个基于 Python 和 Tkinter 的现代化桌面应用程�
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/jiedi720/DocumentSplitter.git
-cd DocumentSplitter
+git clone https://github.com/jiedi720/DocuSplitter.git
+cd DocuSplitter
 ```
 
 ### 2. 安装依赖
@@ -90,7 +90,7 @@ pip install -r requirements.txt
 ### 3. 运行程序
 
 ```bash
-python DocumentSplitter.py
+python DocuSplitter.py
 ```
 
 ## 使用指南
@@ -147,13 +147,13 @@ python DocumentSplitter.py
 ## 项目结构
 
 ```
-DocumentSplitter/
-├── DocumentSplitter.py          # 主入口文件
+DocuSplitter/
+├── DocuSplitter.py              # 主入口文件
 ├── requirements.txt             # 项目依赖
 ├── README.md                   # 项目说明
 ├── build_exe.py                # 打包脚本
-├── DocumentSplitter.spec       # PyInstaller 配置
-├── DocumentSplitter.ini         # 配置文件
+├── DocuSplitter.spec           # PyInstaller 配置
+├── DocuSplitter.ini             # 配置文件
 ├── function/                   # 功能模块
 │   ├── __init__.py
 │   ├── file_handler.py         # 通用文件处理
@@ -206,7 +206,7 @@ DocumentSplitter/
 
 ## 配置文件
 
-程序使用 `DocumentSplitter.ini` 配置文件保存用户设置：
+程序使用 `DocuSplitter.ini` 配置文件保存用户设置：
 
 ```ini
 [SplitSettings]

@@ -64,7 +64,7 @@ class MainApplication:
         self.setup_window_icon()
 
         # 设置窗口标题和尺寸
-        self.root.title("DocumentSplitter")  # 设置窗口标题
+        self.root.title("DocuSplitter")  # 设置窗口标题
         self.root.geometry("450x550")
         # 设置最小宽度，确保所有按钮都能完整显示
         self.root.minsize(450, 450)
@@ -673,10 +673,10 @@ class MainApplication:
             # 获取图标文件路径
             if hasattr(sys, '_MEIPASS'):
                 # 打包后环境：使用临时目录中的图标
-                icon_path = Path(sys._MEIPASS) / 'icons' / 'DocumentSplitter.png'
+                icon_path = Path(sys._MEIPASS) / 'icons' / 'DocuSplitter.png'
             else:
                 # 开发环境：使用项目目录中的图标
-                icon_path = Path(__file__).resolve().parents[1] / 'icons' / 'DocumentSplitter.png'
+                icon_path = Path(__file__).resolve().parents[1] / 'icons' / 'DocuSplitter.png'
 
             # 检查图标文件是否存在
             if icon_path.exists():

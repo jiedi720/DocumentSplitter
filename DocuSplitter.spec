@@ -13,7 +13,7 @@ else:
     current_dir = os.path.dirname(os.path.abspath(sys.argv[0])) if len(sys.argv) > 0 else os.getcwd()
 
 # Full path to the icon file
-ICON_PATH = os.path.join(current_dir, 'icons', 'DocumentSplitter.png')
+ICON_PATH = os.path.join(current_dir, 'icons', 'DocuSplitter.png')
 
 # 使用 collect_all 自动收集依赖模块
 # collect_all 返回 (binaries, datas, hiddenimports)
@@ -69,7 +69,7 @@ for binary in all_binaries:
             unique_bins.append((src_path, dest_path))
 
 a = Analysis(
-    ['DocumentSplitter.py'],
+    ['DocuSplitter.py'],
     pathex=[],
     binaries=unique_bins,
     datas=[
@@ -112,7 +112,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
-    name='DocumentSplitter',
+    name='DocuSplitter',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -133,5 +133,5 @@ coll = COLLECT(
     strip=False,        # Whether to remove symbol table (usually False to avoid errors)
     upx=True,           # Whether to use UPX compression/obfuscation
     upx_exclude=[],     # Files to exclude from compression
-    name='DocumentSplitter',  # Final folder name that will be generated
+    name='DocuSplitter',  # Final folder name that will be generated
 )
