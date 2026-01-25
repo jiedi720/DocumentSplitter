@@ -740,6 +740,7 @@ class MainApplication:
                 # 设置保留章节完整性
                 if "preserve_chapter" in split_settings:
                     self.settings_panel.preserve_chapter_var.set(split_settings["preserve_chapter"])
+
             
             # 应用路径设置
             if "Paths" in config:
@@ -771,7 +772,8 @@ class MainApplication:
                     "preserve_chapter": self.settings_panel.preserve_chapter_var.get(),
                     "chars_value": self.settings_panel.chars_var.get(),
                     "pages_value": self.settings_panel.pages_var.get(),
-                    "equal_value": self.settings_panel.equal_var.get()
+                    "equal_value": self.settings_panel.equal_var.get(),
+                    "exclude_formats": self.settings_panel.exclude_formats_var.get()
                 },
                 "Paths": {
                     "input_dir": input_dir,

@@ -43,6 +43,8 @@ class SettingsPanel(ttk.LabelFrame):
 
         # 保留章节完整性变量
         self.preserve_chapter_var = tk.BooleanVar(value=False)
+        
+
 
         # 高级选项展开状态
         self.advanced_expanded = tk.BooleanVar(value=False)
@@ -173,7 +175,9 @@ class SettingsPanel(ttk.LabelFrame):
             text="保留章节完整性（尽量不在章节中间分割）",
             variable=self.preserve_chapter_var
         )
-        self.preserve_chapter_check.pack(anchor=tk.W)
+        self.preserve_chapter_check.pack(anchor=tk.W, pady=(0, 5))
+        
+
         row += 1
 
         # ========== 输出路径选择 ==========
@@ -195,8 +199,8 @@ class SettingsPanel(ttk.LabelFrame):
         )
         self.output_button.pack(side=tk.LEFT)
 
-        # 初始状态：折叠高级选项
-        self.toggle_advanced(force_collapse=True)
+        # 初始状态：展开高级选项，方便用户查看排除文件格式设置
+        self.toggle_advanced(force_collapse=False)
 
     def toggle_advanced(self, force_collapse=False):
         """切换高级选项的展开/折叠状态
@@ -343,7 +347,8 @@ class SettingsPanel(ttk.LabelFrame):
             'mode': mode,  # 分割模式
             'value': value,  # 分割数值
             'output_path': self.output_path_var.get(),  # 输出路径
-            'preserve_chapter': self.preserve_chapter_var.get()  # 保留章节完整性
+            'preserve_chapter': self.preserve_chapter_var.get(),  # 保留章节完整性
+            'exclude_formats': self.exclude_formats_var.get()  # 排除文件格式
         }
 
         return settings
@@ -401,6 +406,8 @@ class SettingsPanel(ttk.LabelFrame):
         self.chars_entry.config(state=state)
         self.pages_entry.config(state=state)
         self.equal_entry.config(state=state)
+
+
 
     def set_output_controls_state(self, state):
         """设置输出路径控件的状态 (normal/disabled)

@@ -38,6 +38,9 @@ class FileSelector(ttk.Frame):
 
         # 加载保存的目录
         self.load_saved_directories()
+        
+        # 加载排除的文件格式
+        self.load_excluded_formats()
 
         # 创建界面组件
         self.create_widgets()
@@ -122,6 +125,57 @@ class FileSelector(ttk.Frame):
             command=self.clear_files
         )
         self.clear_file_button.pack(side=tk.LEFT)
+        
+        # ========== 第三行：排除文件格式设置 ==========
+        # 创建排除格式设置区域
+        exclude_frame = ttk.Frame(self)
+        exclude_frame.grid(row=2, column=0, sticky=tk.W, pady=(10, 0), padx=10)
+        
+        ttk.Label(exclude_frame, text="排除文件格式:").grid(row=0, column=0, sticky=tk.W, padx=(0, 10))
+        
+        # 创建支持的文件格式列表
+        self.supported_formats = ['.pdf', '.docx', '.txt', '.md']
+        
+        # 创建排除格式选择框
+        self.exclude_formats_combobox = ttk.Combobox(
+            exclude_frame, 
+            values=self.supported_formats,
+            width=7,
+            state='readonly'
+        )
+        self.exclude_formats_combobox.grid(row=0, column=1, sticky=tk.W, padx=(0, 10))
+        
+        # 添加选择按钮
+        self.add_exclude_button = ttk.Button(
+            exclude_frame, 
+            text="添加", 
+            width=6,
+            command=self.add_excluded_format
+        )
+        self.add_exclude_button.grid(row=0, column=2, sticky=tk.W, padx=(0, 10))
+        
+        # 添加移除所有按钮
+        self.remove_exclude_button = ttk.Button(
+            exclude_frame, 
+            text="移除所有", 
+            width=8,
+            command=self.remove_all_excluded_formats
+        )
+        self.remove_exclude_button.grid(row=0, column=3, sticky=tk.W, padx=(0, 10))
+        
+        # 显示当前已排除的格式
+        self.excluded_formats_display = ttk.Label(
+            exclude_frame, 
+            text="无", 
+            foreground='#666666'
+        )
+        self.excluded_formats_display.grid(row=0, column=4, sticky=tk.W)
+        
+        # 存储当前已排除的格式列表
+        self.current_excluded_formats = []
+        
+        # 初始化显示
+        self.update_excluded_formats_display()
 
     def browse_file(self):
         """浏览并选择文件（清除已选文件）
@@ -135,14 +189,37 @@ class FileSelector(ttk.Frame):
         parent = self.winfo_toplevel()
 
         # 定义支持的文件类型
-        filetypes = (
-            ('Supported Files', '*.pdf *.docx *.txt *.md'),
-            ('PDF files', '*.pdf'),
-            ('Word files', '*.docx'),
-            ('Text files', '*.txt'),
-            ('Markdown files', '*.md'),
-            ('All files', '*.*')
-        )
+        supported_extensions = ['.pdf', '.docx', '.txt', '.md']
+        
+        # 获取排除的文件格式
+        excluded_formats = self.get_excluded_formats()
+        
+        # 过滤支持的扩展名，排除不需要的格式
+        filtered_extensions = [ext for ext in supported_extensions if ext not in excluded_formats]
+        
+        # 构建文件类型过滤器
+        if filtered_extensions:
+            # 构建第一个过滤器：所有支持且未被排除的文件
+            first_filter_pattern = ' '.join([f'*{ext}' for ext in filtered_extensions])
+            filetypes = [
+                ('Supported Files', first_filter_pattern),
+            ]
+            
+            # 为每个剩余的扩展名添加单独的过滤器
+            for ext in filtered_extensions:
+                if ext == '.pdf':
+                    filetypes.append(('PDF files', '*.pdf'))
+                elif ext == '.docx':
+                    filetypes.append(('Word files', '*.docx'))
+                elif ext == '.txt':
+                    filetypes.append(('Text files', '*.txt'))
+                elif ext == '.md':
+                    filetypes.append(('Markdown files', '*.md'))
+            
+            filetypes.append(('All files', '*.*'))
+        else:
+            # 如果所有格式都被排除，只显示所有文件选项
+            filetypes = [('All files', '*.*')]
 
         # 打开文件对话框（支持多文件选择）
         filenames = filedialog.askopenfilenames(
@@ -153,12 +230,21 @@ class FileSelector(ttk.Frame):
 
         # 如果用户选择了文件，则更新路径变量（清除之前的文件）
         if filenames:
-            self.selected_files = list(filenames)
+            # 应用排除格式过滤
+            filtered_files = []
+            for filename in filenames:
+                file_ext = Path(filename).suffix.lower()
+                if file_ext in filtered_extensions:
+                    filtered_files.append(filename)
+            
+            self.selected_files = filtered_files
             # 显示第一个文件路径，但保留所有文件在列表中
-            if len(filenames) == 1:
-                self.selected_file_path.set(filenames[0])
+            if len(filtered_files) == 1:
+                self.selected_file_path.set(filtered_files[0])
+            elif filtered_files:
+                self.selected_file_path.set(f"已选择 {len(filtered_files)} 个文件")
             else:
-                self.selected_file_path.set(f"已选择 {len(filenames)} 个文件")
+                self.selected_file_path.set("拖拽文件到此处，或使用下方按钮选择")
         else:
             # 用户取消了选择，保持当前状态不变
             pass
@@ -175,14 +261,37 @@ class FileSelector(ttk.Frame):
         parent = self.winfo_toplevel()
 
         # 定义支持的文件类型
-        filetypes = (
-            ('Supported Files', '*.pdf *.docx *.txt *.md'),
-            ('PDF files', '*.pdf'),
-            ('Word files', '*.docx'),
-            ('Text files', '*.txt'),
-            ('Markdown files', '*.md'),
-            ('All files', '*.*')
-        )
+        supported_extensions = ['.pdf', '.docx', '.txt', '.md']
+        
+        # 获取排除的文件格式
+        excluded_formats = self.get_excluded_formats()
+        
+        # 过滤支持的扩展名，排除不需要的格式
+        filtered_extensions = [ext for ext in supported_extensions if ext not in excluded_formats]
+        
+        # 构建文件类型过滤器
+        if filtered_extensions:
+            # 构建第一个过滤器：所有支持且未被排除的文件
+            first_filter_pattern = ' '.join([f'*{ext}' for ext in filtered_extensions])
+            filetypes = [
+                ('Supported Files', first_filter_pattern),
+            ]
+            
+            # 为每个剩余的扩展名添加单独的过滤器
+            for ext in filtered_extensions:
+                if ext == '.pdf':
+                    filetypes.append(('PDF files', '*.pdf'))
+                elif ext == '.docx':
+                    filetypes.append(('Word files', '*.docx'))
+                elif ext == '.txt':
+                    filetypes.append(('Text files', '*.txt'))
+                elif ext == '.md':
+                    filetypes.append(('Markdown files', '*.md'))
+            
+            filetypes.append(('All files', '*.*'))
+        else:
+            # 如果所有格式都被排除，只显示所有文件选项
+            filetypes = [('All files', '*.*')]
 
         # 打开文件对话框（支持多文件选择）
         filenames = filedialog.askopenfilenames(
@@ -193,16 +302,20 @@ class FileSelector(ttk.Frame):
 
         # 如果用户选择了文件，则添加到已选文件列表
         if filenames:
-            # 添加新文件到列表中（避免重复）
+            # 添加新文件到列表中（避免重复，且只添加未被排除的格式）
             for filename in filenames:
                 if filename not in self.selected_files:
-                    self.selected_files.append(filename)
+                    file_ext = Path(filename).suffix.lower()
+                    if file_ext in filtered_extensions:
+                        self.selected_files.append(filename)
 
             # 更新显示
             if len(self.selected_files) == 1:
                 self.selected_file_path.set(self.selected_files[0])
-            else:
+            elif self.selected_files:
                 self.selected_file_path.set(f"已选择 {len(self.selected_files)} 个文件")
+            else:
+                self.selected_file_path.set("拖拽文件到此处，或使用下方按钮选择")
 
     def clear_files(self):
         """清除所有已选文件
@@ -308,6 +421,58 @@ class FileSelector(ttk.Frame):
                 self.last_input_dir = directory
             except Exception:
                 pass
+    
+    def add_excluded_format(self):
+        """添加选中的格式到排除列表"""
+        selected_format = self.exclude_formats_combobox.get()
+        if selected_format and selected_format not in self.current_excluded_formats:
+            self.current_excluded_formats.append(selected_format)
+            self.update_excluded_formats_display()
+            self.save_excluded_formats()
+    
+    def remove_all_excluded_formats(self):
+        """移除所有排除的格式"""
+        self.current_excluded_formats = []
+        self.update_excluded_formats_display()
+        self.save_excluded_formats()
+    
+    def update_excluded_formats_display(self):
+        """更新显示当前已排除的格式"""
+        if self.current_excluded_formats:
+            display_text = ", ".join(self.current_excluded_formats)
+        else:
+            display_text = "无"
+        self.excluded_formats_display.config(text=display_text)
+    
+    def save_excluded_formats(self):
+        """保存排除格式到配置文件"""
+        if self.config_manager:
+            try:
+                config = self.config_manager.read_config()
+                config["SplitSettings"]["exclude_formats"] = ",".join(self.current_excluded_formats)
+                self.config_manager.save_config(config)
+            except Exception as e:
+                pass
+    
+    def load_excluded_formats(self):
+        """从配置文件加载排除的文件格式"""
+        self.current_excluded_formats = []
+        if self.config_manager:
+            try:
+                config = self.config_manager.read_config()
+                exclude_formats_str = config.get("SplitSettings", {}).get("exclude_formats", "")
+                if exclude_formats_str:
+                    self.current_excluded_formats = [f.strip() for f in exclude_formats_str.split(",") if f.strip()]
+            except Exception as e:
+                pass
+    
+    def get_excluded_formats(self):
+        """获取排除的文件格式列表
+        
+        Returns:
+            list: 排除的文件格式列表
+        """
+        return self.current_excluded_formats
 
     def setup_drag_and_drop(self):
         """设置拖放功能
@@ -414,8 +579,11 @@ class FileSelector(ttk.Frame):
                     # 如果是文件，验证文件类型
                     file_ext = Path(path).suffix.lower()
                     supported_extensions = ['.pdf', '.docx', '.txt', '.md']
+                    
+                    # 获取排除的文件格式
+                    excluded_formats = self.get_excluded_formats()
 
-                    if file_ext in supported_extensions:
+                    if file_ext in supported_extensions and file_ext not in excluded_formats:
                         valid_files.append(path)
                     else:
                         unsupported_items.append(path)
@@ -471,6 +639,9 @@ class FileSelector(ttk.Frame):
         """
         supported_extensions = ['.pdf', '.docx', '.txt', '.md']
         valid_files = []
+        
+        # 获取排除的文件格式
+        excluded_formats = self.get_excluded_formats()
 
         try:
             # 递归遍历目录及其子目录
@@ -479,7 +650,7 @@ class FileSelector(ttk.Frame):
                     file_path = os.path.join(root, filename)
                     # 检查文件扩展名
                     file_ext = os.path.splitext(filename)[1].lower()
-                    if file_ext in supported_extensions:
+                    if file_ext in supported_extensions and file_ext not in excluded_formats:
                         valid_files.append(file_path)
         except Exception as e:
             # 如果目录无法访问，返回空列表

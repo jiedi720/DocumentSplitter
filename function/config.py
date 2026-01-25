@@ -56,7 +56,8 @@ class ConfigManager:
             "preserve_chapter": "False",
             "chars_value": "1000",
             "pages_value": "10",
-            "equal_value": "5"
+            "equal_value": "5",
+            "exclude_formats": ""
         }
 
         self.config["Paths"] = {
@@ -86,7 +87,8 @@ class ConfigManager:
                 "pages_value": self.config.get("SplitSettings", "pages_value", fallback="10"),
                 "equal_value": self.config.get("SplitSettings", "equal_value", fallback="5"),
                 "mode": self.config.get("SplitSettings", "mode", fallback="chars"),
-                "preserve_chapter": self.config.getboolean("SplitSettings", "preserve_chapter", fallback=False)
+                "preserve_chapter": self.config.getboolean("SplitSettings", "preserve_chapter", fallback=False),
+                "exclude_formats": self.config.get("SplitSettings", "exclude_formats", fallback="")
             },
             "Paths": {
                 "input_dir": self.config.get("Paths", "input_dir", fallback=""),
@@ -109,7 +111,7 @@ class ConfigManager:
             # 按照指定顺序更新配置
             split_settings = config["SplitSettings"]
             # 确保按照指定顺序更新
-            ordered_keys = ["mode", "preserve_chapter", "chars_value", "pages_value", "equal_value"]
+            ordered_keys = ["mode", "preserve_chapter", "chars_value", "pages_value", "equal_value", "exclude_formats"]
             for key in ordered_keys:
                 if key in split_settings:
                     self.config["SplitSettings"][key] = str(split_settings[key])
