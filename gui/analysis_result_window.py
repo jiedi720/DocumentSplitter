@@ -71,11 +71,41 @@ class AnalysisResultWindow:
         main_frame = ttk.Frame(self.window, padding="10")
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        
-
         # 创建表格框架
         table_frame = ttk.Frame(main_frame)
         table_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # 创建统计信息框架（固定在表格上方）
+        stats_frame = ttk.Frame(table_frame)
+        stats_frame.pack(fill=tk.X, side=tk.TOP)
+        
+        # 创建总计行
+        total_frame = ttk.Frame(stats_frame)
+        total_frame.pack(fill=tk.X)
+        
+        # 创建总计行标签
+        self.total_labels = {
+            'filename': ttk.Label(total_frame, text="总计", anchor=tk.CENTER, relief=tk.SOLID, borderwidth=1),
+            'file_type': ttk.Label(total_frame, text="-", anchor=tk.CENTER, relief=tk.SOLID, borderwidth=1),
+            'char_count': ttk.Label(total_frame, text="0", anchor=tk.E, relief=tk.SOLID, borderwidth=1),
+            'page_count': ttk.Label(total_frame, text="0", anchor=tk.CENTER, relief=tk.SOLID, borderwidth=1),
+            'file_size': ttk.Label(total_frame, text="0.00 MB", anchor=tk.E, relief=tk.SOLID, borderwidth=1)
+        }
+        
+        # 使用grid布局，精确控制列宽与表格对齐
+        # 参考表格列宽：filename=200, file_type=70, char_count=70, page_count=70, file_size=70
+        total_frame.columnconfigure(0, minsize=200, weight=0)
+        total_frame.columnconfigure(1, minsize=70, weight=0)
+        total_frame.columnconfigure(2, minsize=70, weight=0)
+        total_frame.columnconfigure(3, minsize=70, weight=0)
+        total_frame.columnconfigure(4, minsize=70, weight=0)
+        
+        # 布局总计行标签
+        self.total_labels['filename'].grid(row=0, column=0, sticky=tk.W+tk.E)
+        self.total_labels['file_type'].grid(row=0, column=1, sticky=tk.W+tk.E)
+        self.total_labels['char_count'].grid(row=0, column=2, sticky=tk.W+tk.E)
+        self.total_labels['page_count'].grid(row=0, column=3, sticky=tk.W+tk.E)
+        self.total_labels['file_size'].grid(row=0, column=4, sticky=tk.W+tk.E)
 
         # 创建表格
         columns = ('filename', 'file_type', 'char_count', 'page_count', 'file_size')
@@ -125,7 +155,46 @@ class AnalysisResultWindow:
         close_button.pack(pady=(10, 0))
 
     def display_results(self):
-        """显示分析结果"""
+        """显示分析结果，包括统计信息"""
+        # 计算统计信息
+        total_chars = 0
+        total_pages = 0
+        total_size_mb = 0.0
+        
+        for result in self.results:
+            # 计算总字符数
+            char_count_str = result.get('char_count', '')
+            if char_count_str.isdigit() or (char_count_str and char_count_str.replace(',', '').isdigit()):
+                # 移除千位分隔符
+                clean_chars = char_count_str.replace(',', '')
+                total_chars += int(clean_chars)
+            
+            # 计算总页数
+            page_count_str = result.get('page_count', '')
+            if page_count_str.isdigit():
+                total_pages += int(page_count_str)
+            
+            # 计算总大小
+            file_size_str = result.get('file_size', '')
+            if file_size_str and 'MB' in file_size_str:
+                try:
+                    # 提取数字部分
+                    size_mb = float(''.join(c for c in file_size_str if c.isdigit() or c == '.'))
+                    total_size_mb += size_mb
+                except ValueError:
+                    pass
+        
+        # 格式化统计结果
+        total_char_str = f"{total_chars:,}" if total_chars > 0 else "0"
+        total_page_str = f"{total_pages:,}" if total_pages > 0 else "0"
+        total_size_str = f"{total_size_mb:.2f} MB" if total_size_mb > 0 else "0.00 MB"
+        
+        # 更新固定统计行的标签文本
+        self.total_labels['char_count'].config(text=total_char_str)
+        self.total_labels['page_count'].config(text=total_page_str)
+        self.total_labels['file_size'].config(text=total_size_str)
+        
+        # 插入实际数据
         for result in self.results:
             # 确保所有必需的键都存在
             filename = result.get('filename', '')

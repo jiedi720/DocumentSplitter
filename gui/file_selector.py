@@ -213,10 +213,10 @@ class FileSelector(ttk.Frame):
         self.selected_file_path.set("拖拽文件到此处，或使用下方按钮选择")
 
     def browse_directory(self):
-        """浏览并选择目录，读取目录中所有支持的文件
+        """浏览并选择目录，读取目录中所有支持的文件，包括子文件夹
 
         该方法打开目录选择对话框，让用户选择一个目录，
-        然后读取该目录中所有支持的文件（.pdf, .docx, .txt）。
+        然后读取该目录及其所有子目录中所有支持的文件（.pdf, .docx, .txt, .md）。
         """
         from tkinter import filedialog
 
@@ -239,22 +239,8 @@ class FileSelector(ttk.Frame):
         # 保存选择的目录
         self.save_input_directory(directory)
 
-        # 支持的文件扩展名
-        supported_extensions = ['.pdf', '.docx', '.txt', '.md']
-
-        # 扫描目录中的所有文件
-        valid_files = []
-        try:
-            for filename in os.listdir(directory):
-                file_path = os.path.join(directory, filename)
-                # 只处理文件，不处理子目录
-                if os.path.isfile(file_path):
-                    # 检查文件扩展名
-                    file_ext = os.path.splitext(filename)[1].lower()
-                    if file_ext in supported_extensions:
-                        valid_files.append(file_path)
-        except Exception as e:
-            return
+        # 扫描目录及其子目录中的所有支持文件
+        valid_files = self.scan_directory_for_supported_files(directory)
 
         # 更新文件列表（清除之前的文件）
         if valid_files:
@@ -475,7 +461,7 @@ class FileSelector(ttk.Frame):
         self.drop_frame.config(background="")
 
     def scan_directory_for_supported_files(self, directory):
-        """扫描目录中所有支持的文件
+        """扫描目录中所有支持的文件，包括子文件夹
 
         Args:
             directory (str): 目录路径
@@ -487,10 +473,10 @@ class FileSelector(ttk.Frame):
         valid_files = []
 
         try:
-            for filename in os.listdir(directory):
-                file_path = os.path.join(directory, filename)
-                # 只处理文件，不处理子目录
-                if os.path.isfile(file_path):
+            # 递归遍历目录及其子目录
+            for root, dirs, files in os.walk(directory):
+                for filename in files:
+                    file_path = os.path.join(root, filename)
                     # 检查文件扩展名
                     file_ext = os.path.splitext(filename)[1].lower()
                     if file_ext in supported_extensions:
