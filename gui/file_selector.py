@@ -540,56 +540,90 @@ class FileSelector(ttk.Frame):
         if files.startswith('{') and files.endswith('}'):
             # 移除最外层的花括号
             files_content = files[1:-1]
-            # 匹配内部的花括号包围的路径
+            
+            # 尝试多种方式分割路径
+            # 1. 尝试匹配内部的花括号包围的路径
             bracket_paths = re.findall(r'\{([^}]*)\}', files_content)
+            
             if bracket_paths:
                 path_list = bracket_paths
             else:
-                # 如果没有内部花括号，尝试按空格分割，但要注意路径中的空格
-                # 这种情况可能是单文件路径，包含空格但没有被正确包围
-                path_list = [files_content]
-        else:
-            # 尝试匹配用引号包围的路径
-            quoted_paths = re.findall(r'"([^"]*)"|\'([^\']*)\'', files)
-            if quoted_paths:
-                # 如果找到引号包围的路径，使用这些路径
-                path_list = [match[0] or match[1] for match in quoted_paths if match[0] or match[1]]
-            else:
-                # 尝试处理没有引号包围但包含空格的路径
-                # 检查是否包含常见文件扩展名
-                has_extension = any(ext in files.lower() for ext in ['.pdf', '.docx', '.txt', '.md'])
-                
-                if has_extension:
-                    # 检查是否包含多个文件扩展名（多个文件）
-                    extensions = ['.pdf', '.docx', '.txt', '.md']
-                    extension_count = 0
-                    for ext in extensions:
-                        extension_count += files.lower().count(ext)
-                    
-                    if extension_count > 1:
-                        # 多个文件，尝试按扩展名分割
-                        # 这里使用正则表达式来分割多个文件路径
-                        # 匹配包含扩展名的路径
-                        import re
-                        # 构建正则表达式，匹配常见文件扩展名
-                        extension_pattern = '|'.join([re.escape(ext) for ext in extensions])
-                        # 匹配路径：以非空白字符开始，包含扩展名，直到遇到下一个路径的开始
-                        path_pattern = rf'([^\s]+{extension_pattern})'
-                        
-                        # 查找所有匹配的路径
-                        multi_paths = re.findall(path_pattern, files)
-                        
-                        if multi_paths:
-                            path_list = multi_paths
-                        else:
-                            # 如果正则表达式分割失败，尝试简单的空格分割
-                            path_list = files.split()
-                    else:
-                        # 单个文件，假设整个字符串是一个路径（可能包含空格）
-                        path_list = [files]
+                # 2. 尝试按 '} {' 分割（常见的多文件格式）
+                if '} {' in files_content:
+                    split_paths = files_content.split('} {')
+                    # 清理每个路径
+                    cleaned_paths = []
+                    for p in split_paths:
+                        cleaned = p.strip()
+                        if cleaned:
+                            cleaned_paths.append(cleaned)
+                    if cleaned_paths:
+                        path_list = cleaned_paths
                 else:
-                    # 否则按空格分割（适用于多个简单路径）
-                    path_list = files.split()
+                    # 3. 尝试按空格分割，但要注意路径中的空格
+                    # 这种情况可能是单文件路径，包含空格但没有被正确包围
+                    path_list = [files_content]
+        else:
+            # 检查是否包含花括号（可能是不完整的花括号包围格式）
+            if '{' in files or '}' in files:
+                # 尝试清理并分割路径
+                # 移除所有花括号
+                cleaned_files = files.replace('{', '').replace('}', '')
+                
+                # 检查是否包含多个文件扩展名
+                extensions = ['.pdf', '.docx', '.txt', '.md']
+                extension_count = 0
+                for ext in extensions:
+                    extension_count += cleaned_files.lower().count(ext)
+                
+                if extension_count > 1:
+                    # 多个文件，尝试按扩展名分割
+                    extension_pattern = '|'.join([re.escape(ext) for ext in extensions])
+                    path_pattern = rf'([^\s]+{extension_pattern})'
+                    multi_paths = re.findall(path_pattern, cleaned_files)
+                    if multi_paths:
+                        path_list = multi_paths
+                    else:
+                        # 尝试简单的空格分割
+                        path_list = cleaned_files.split()
+                else:
+                    # 单个文件
+                    path_list = [cleaned_files]
+            else:
+                # 尝试匹配用引号包围的路径
+                quoted_paths = re.findall(r'"([^"]*)"|\'([^\']*)\'', files)
+                if quoted_paths:
+                    # 如果找到引号包围的路径，使用这些路径
+                    path_list = [match[0] or match[1] for match in quoted_paths if match[0] or match[1]]
+                else:
+                    # 尝试处理没有引号包围但包含空格的路径
+                    # 检查是否包含常见文件扩展名
+                    has_extension = any(ext in files.lower() for ext in ['.pdf', '.docx', '.txt', '.md'])
+                    
+                    if has_extension:
+                        # 检查是否包含多个文件扩展名（多个文件）
+                        extensions = ['.pdf', '.docx', '.txt', '.md']
+                        extension_count = 0
+                        for ext in extensions:
+                            extension_count += files.lower().count(ext)
+                        
+                        if extension_count > 1:
+                            # 多个文件，尝试按扩展名分割
+                            extension_pattern = '|'.join([re.escape(ext) for ext in extensions])
+                            path_pattern = rf'([^\s]+{extension_pattern})'
+                            multi_paths = re.findall(path_pattern, files)
+                            
+                            if multi_paths:
+                                path_list = multi_paths
+                            else:
+                                # 如果正则表达式分割失败，尝试简单的空格分割
+                                path_list = files.split()
+                        else:
+                            # 单个文件，假设整个字符串是一个路径（可能包含空格）
+                            path_list = [files]
+                    else:
+                        # 否则按空格分割（适用于多个简单路径）
+                        path_list = files.split()
 
         # 处理所有路径（可能是文件或文件夹）
         valid_files = []
