@@ -528,15 +528,26 @@ class FileSelector(ttk.Frame):
         if isinstance(files, str):
             # 移除可能的引号
             files = files.strip('"\'')
+        else:
+            files = str(files)
+
         # 分割多个文件（如果用户拖放了多个）
         # 对于Windows，多个文件路径通常被花括号包围，格式为 {路径1} {路径2}
         import re
-        # 匹配花括号包围的路径
-        bracket_paths = re.findall(r'\{([^}]*)\}', files)
+        path_list = []
 
-        if bracket_paths:
-            # 如果找到花括号包围的路径，使用这些路径
-            path_list = bracket_paths
+        # 优先处理花括号包围的路径格式（Windows标准格式）
+        if files.startswith('{') and files.endswith('}'):
+            # 移除最外层的花括号
+            files_content = files[1:-1]
+            # 匹配内部的花括号包围的路径
+            bracket_paths = re.findall(r'\{([^}]*)\}', files_content)
+            if bracket_paths:
+                path_list = bracket_paths
+            else:
+                # 如果没有内部花括号，尝试按空格分割，但要注意路径中的空格
+                # 这种情况可能是单文件路径，包含空格但没有被正确包围
+                path_list = [files_content]
         else:
             # 尝试匹配用引号包围的路径
             quoted_paths = re.findall(r'"([^"]*)"|\'([^\']*)\'', files)
@@ -544,17 +555,41 @@ class FileSelector(ttk.Frame):
                 # 如果找到引号包围的路径，使用这些路径
                 path_list = [match[0] or match[1] for match in quoted_paths if match[0] or match[1]]
             else:
-                # 如果没有引号包围的路径，对于Windows拖拽，通常整个路径被花括号包围作为一个整体
-                # 或者路径中包含空格但没有引号，我们需要特殊处理这种情况
-                files_stripped = files.strip('{}')  # 移除最外层的花括号
-
-                # 如果路径包含常见的文件扩展名且有空格，很可能这是一个带空格的完整路径
-                if any(ext in files_stripped.lower() for ext in ['.pdf', '.docx', '.txt']):
-                    # 假设整个（去除花括号后）的字符串是一个路径
-                    path_list = [files_stripped]
+                # 尝试处理没有引号包围但包含空格的路径
+                # 检查是否包含常见文件扩展名
+                has_extension = any(ext in files.lower() for ext in ['.pdf', '.docx', '.txt', '.md'])
+                
+                if has_extension:
+                    # 检查是否包含多个文件扩展名（多个文件）
+                    extensions = ['.pdf', '.docx', '.txt', '.md']
+                    extension_count = 0
+                    for ext in extensions:
+                        extension_count += files.lower().count(ext)
+                    
+                    if extension_count > 1:
+                        # 多个文件，尝试按扩展名分割
+                        # 这里使用正则表达式来分割多个文件路径
+                        # 匹配包含扩展名的路径
+                        import re
+                        # 构建正则表达式，匹配常见文件扩展名
+                        extension_pattern = '|'.join([re.escape(ext) for ext in extensions])
+                        # 匹配路径：以非空白字符开始，包含扩展名，直到遇到下一个路径的开始
+                        path_pattern = rf'([^\s]+{extension_pattern})'
+                        
+                        # 查找所有匹配的路径
+                        multi_paths = re.findall(path_pattern, files)
+                        
+                        if multi_paths:
+                            path_list = multi_paths
+                        else:
+                            # 如果正则表达式分割失败，尝试简单的空格分割
+                            path_list = files.split()
+                    else:
+                        # 单个文件，假设整个字符串是一个路径（可能包含空格）
+                        path_list = [files]
                 else:
-                    # 否则按空格分割
-                    path_list = files_stripped.split()
+                    # 否则按空格分割（适用于多个简单路径）
+                    path_list = files.split()
 
         # 处理所有路径（可能是文件或文件夹）
         valid_files = []
@@ -566,50 +601,65 @@ class FileSelector(ttk.Frame):
             if not path:
                 continue
 
-            # 尝试规范化路径
+            # 尝试多种路径处理方法
+            processed_paths = [path]
+            
+            # 添加可能的解码路径
             try:
-                normalized_path = Path(path).resolve()
-                path = str(normalized_path)
-            except Exception as e:
-                continue
-
-            # 检查路径是否存在
-            if Path(path).exists():
-                if Path(path).is_file():
-                    # 如果是文件，验证文件类型
-                    file_ext = Path(path).suffix.lower()
-                    supported_extensions = ['.pdf', '.docx', '.txt', '.md']
-                    
-                    # 获取排除的文件格式
-                    excluded_formats = self.get_excluded_formats()
-
-                    if file_ext in supported_extensions and file_ext not in excluded_formats:
-                        valid_files.append(path)
-                    else:
-                        unsupported_items.append(path)
-                elif Path(path).is_dir():
-                    # 如果是目录，扫描目录中的所有支持的文件
-                    dir_valid_files = self.scan_directory_for_supported_files(path)
-                    valid_files.extend(dir_valid_files)
-                else:
-                    # 其他类型（不太可能）
-                    unsupported_items.append(path)
-            else:
-                # 路径不存在 - 尝试多种路径格式
                 import urllib.parse
                 decoded_path = urllib.parse.unquote(path)
-                if Path(decoded_path).exists():
-                    if Path(decoded_path).is_file():
-                        file_ext = Path(decoded_path).suffix.lower()
-                        supported_extensions = ['.pdf', '.docx', '.txt', '.md']
-                        if file_ext in supported_extensions:
-                            valid_files.append(decoded_path)
-                        else:
-                            unsupported_items.append(decoded_path)
-                    elif Path(decoded_path).is_dir():
-                        # 如果是目录，扫描目录中的所有支持的文件
-                        dir_valid_files = self.scan_directory_for_supported_files(decoded_path)
-                        valid_files.extend(dir_valid_files)
+                if decoded_path != path:
+                    processed_paths.append(decoded_path)
+            except:
+                pass
+
+            # 尝试处理所有可能的路径
+            path_valid = False
+            for processed_path in processed_paths:
+                try:
+                    # 尝试规范化路径
+                    normalized_path = Path(processed_path).resolve()
+                    path_str = str(normalized_path)
+
+                    # 检查路径是否存在
+                    if Path(path_str).exists():
+                        if Path(path_str).is_file():
+                            # 如果是文件，验证文件类型
+                            file_ext = Path(path_str).suffix.lower()
+                            supported_extensions = ['.pdf', '.docx', '.txt', '.md']
+                            
+                            # 获取排除的文件格式
+                            excluded_formats = self.get_excluded_formats()
+
+                            if file_ext in supported_extensions and file_ext not in excluded_formats:
+                                valid_files.append(path_str)
+                                path_valid = True
+                                break
+                            else:
+                                unsupported_items.append(path_str)
+                                path_valid = True  # 路径存在但不支持
+                                break
+                        elif Path(path_str).is_dir():
+                            # 如果是目录，扫描目录中的所有支持的文件
+                            dir_valid_files = self.scan_directory_for_supported_files(path_str)
+                            if dir_valid_files:
+                                valid_files.extend(dir_valid_files)
+                                path_valid = True
+                                break
+                            else:
+                                unsupported_items.append(path_str)
+                                path_valid = True  # 路径存在但目录中没有支持的文件
+                                break
+                    else:
+                        # 路径不存在，继续尝试其他处理方法
+                        continue
+                except Exception as e:
+                    # 路径处理出错，继续尝试其他方法
+                    continue
+
+            # 如果所有处理方法都失败，将路径添加到不支持列表
+            if not path_valid:
+                unsupported_items.append(path)
 
         # 更新文件列表（清除之前的文件）
         self.selected_files = valid_files
