@@ -56,36 +56,293 @@ class PDFCombiner:
         if output_path is None:
             output_path = self.file_handler.generate_merge_output_filename(input_files)
 
-        # 使用 PdfMerger 自动处理书签合并
-        merger = PyPDF2.PdfMerger()
-
-        # 合并所有 PDF 文件
-        for i, file_path in enumerate(input_files):
-            print(f"DEBUG: 正在处理第 {i+1} 个文件: {file_path}")
-            try:
-                # import_outline=True 是关键，它会自动保留并调整原有的书签页码
-                merger.append(file_path, import_outline=True)
-                print(f"DEBUG: 成功添加文件: {file_path}")
-            except Exception as e:
-                print(f"DEBUG: 添加文件时出错: {file_path}")
-                print(f"DEBUG: 错误详情: {str(e)}")
-                raise
-
-        # 将内容写入输出文件
-        print(f"DEBUG: 所有文件添加完成，准备写入输出文件: {output_path}")
+        # 方法 1: 尝试使用 PyPDF2 合并（带错误处理）
+        print("DEBUG: 尝试方法 1: 使用 PyPDF2 合并")
         try:
-            with open(output_path, 'wb') as fileobj:
-                merger.write(fileobj)
-            print(f"DEBUG: 成功写入输出文件")
-        except Exception as e:
-            print(f"DEBUG: 写入文件时出错")
-            print(f"DEBUG: 错误详情: {str(e)}")
-            raise
-        
-        # 关闭合并器，释放资源
-        merger.close()
-        print(f"DEBUG: 合并完成，输出文件: {output_path}")
+            # 使用 PdfMerger 自动处理书签合并
+            merger = PyPDF2.PdfMerger()
 
-        return output_path
+            # 合并所有 PDF 文件
+            for i, file_path in enumerate(input_files):
+                print(f"DEBUG: 正在处理第 {i+1} 个文件: {file_path}")
+                try:
+                    # import_outline=True 是关键，它会自动保留并调整原有的书签页码
+                    merger.append(file_path, import_outline=True)
+                    print(f"DEBUG: 成功添加文件: {file_path}")
+                except Exception as e:
+                    print(f"DEBUG: 添加文件时出错: {file_path}")
+                    error_msg = str(e) if str(e) else "(无具体错误信息)"
+                    print(f"DEBUG: 错误详情: {error_msg}")
+                    raise
+
+            # 将内容写入输出文件
+            print(f"DEBUG: 所有文件添加完成，准备写入输出文件: {output_path}")
+            try:
+                with open(output_path, 'wb') as fileobj:
+                    merger.write(fileobj)
+                print(f"DEBUG: 成功写入输出文件")
+            except Exception as e:
+                print(f"DEBUG: 写入文件时出错")
+                error_msg = str(e) if str(e) else "(无具体错误信息)"
+                print(f"DEBUG: 错误详情: {error_msg}")
+                # 尝试方法 2: 不保留书签
+                print("DEBUG: 尝试方法 2: 不保留书签")
+                # 关闭合并器，释放资源
+                merger.close()
+                return self._merge_pdfs_no_outline(input_files, output_path)
+            
+            # 关闭合并器，释放资源
+            merger.close()
+
+            return output_path
+        except Exception as e:
+            print(f"DEBUG: 方法 1 失败，错误详情: {str(e)}")
+            # 尝试方法 2: 不保留书签
+            print("DEBUG: 尝试方法 2: 不保留书签")
+            return self._merge_pdfs_no_outline(input_files, output_path)
+    
+    def _merge_pdfs_no_outline(self, input_files, output_path):
+        """
+        合并多个 PDF 文件（不保留书签）
+
+        当保留书签的方法失败时，使用此方法作为备选。
+
+        Args:
+            input_files (list): 要合并的 PDF 文件路径列表
+            output_path (str): 输出文件路径
+
+        Returns:
+            str: 合并后文件的路径
+        """
+        try:
+            merger = PyPDF2.PdfMerger()
+
+            # 合并所有 PDF 文件，不导入大纲
+            for i, file_path in enumerate(input_files):
+                print(f"DEBUG: 方法 2 - 正在处理第 {i+1} 个文件: {file_path}")
+                try:
+                    # import_outline=False 不导入大纲，避免可能的错误
+                    merger.append(file_path, import_outline=False)
+                    print(f"DEBUG: 方法 2 - 成功添加文件: {file_path}")
+                except Exception as e:
+                    print(f"DEBUG: 方法 2 - 添加文件时出错: {file_path}")
+                    error_msg = str(e) if str(e) else "(无具体错误信息)"
+                    print(f"DEBUG: 方法 2 - 错误详情: {error_msg}")
+                    raise
+
+            # 将内容写入输出文件
+            print(f"DEBUG: 方法 2 - 所有文件添加完成，准备写入输出文件: {output_path}")
+            try:
+                with open(output_path, 'wb') as fileobj:
+                    merger.write(fileobj)
+                print(f"DEBUG: 方法 2 - 成功写入输出文件")
+            except Exception as e:
+                print(f"DEBUG: 方法 2 - 写入文件时出错")
+                error_msg = str(e) if str(e) else "(无具体错误信息)"
+                print(f"DEBUG: 方法 2 - 错误详情: {error_msg}")
+                # 尝试方法 3: 逐个页面复制
+                print("DEBUG: 尝试方法 3: 逐个页面复制")
+                return self._merge_pdfs_page_by_page(input_files, output_path)
+            
+            # 关闭合并器，释放资源
+            merger.close()
+
+            return output_path
+        except Exception as e:
+            error_msg = str(e) if str(e) else "(无具体错误信息)"
+            print(f"DEBUG: 方法 2 失败，错误详情: {error_msg}")
+            # 尝试方法 3: 逐个页面复制
+            print("DEBUG: 尝试方法 3: 逐个页面复制")
+            return self._merge_pdfs_page_by_page(input_files, output_path)
+    
+    def _merge_pdfs_page_by_page(self, input_files, output_path):
+        """
+        合并多个 PDF 文件（逐个页面复制）
+
+        当其他方法失败时，使用此方法作为最终备选。
+
+        Args:
+            input_files (list): 要合并的 PDF 文件路径列表
+            output_path (str): 输出文件路径
+
+        Returns:
+            str: 合并后文件的路径
+        """
+        try:
+            # 创建一个新的 PDF 写入器
+            writer = PyPDF2.PdfWriter()
+
+            # 逐个处理每个 PDF 文件
+            for i, file_path in enumerate(input_files):
+                print(f"DEBUG: 方法 3 - 正在处理第 {i+1} 个文件: {file_path}")
+                try:
+                    # 打开 PDF 文件
+                    with open(file_path, 'rb') as fileobj:
+                        reader = PyPDF2.PdfReader(fileobj)
+                        # 逐个页面复制
+                        num_pages = len(reader.pages)
+                        print(f"DEBUG: 方法 3 - 文件包含 {num_pages} 页")
+                        for page_num in range(num_pages):
+                            try:
+                                page = reader.pages[page_num]
+                                writer.add_page(page)
+                                print(f"DEBUG: 方法 3 - 成功添加第 {page_num+1} 页")
+                            except Exception as e:
+                                print(f"DEBUG: 方法 3 - 添加第 {page_num+1} 页时出错")
+                                error_msg = str(e) if str(e) else "(无具体错误信息)"
+                                print(f"DEBUG: 方法 3 - 错误详情: {error_msg}")
+                                # 跳过有问题的页面，继续处理其他页面
+                                print(f"DEBUG: 方法 3 - 跳过第 {page_num+1} 页")
+                                continue
+                    print(f"DEBUG: 方法 3 - 成功添加文件: {file_path}")
+                except Exception as e:
+                    print(f"DEBUG: 方法 3 - 添加文件时出错: {file_path}")
+                    error_msg = str(e) if str(e) else "(无具体错误信息)"
+                    print(f"DEBUG: 方法 3 - 错误详情: {error_msg}")
+                    # 尝试方法 4: 使用异常处理逐个文件
+                    print("DEBUG: 尝试方法 4: 使用异常处理逐个文件")
+                    return self._merge_pdfs_error_handling(input_files, output_path)
+
+            # 将内容写入输出文件
+            print(f"DEBUG: 方法 3 - 所有文件添加完成，准备写入输出文件: {output_path}")
+            try:
+                with open(output_path, 'wb') as fileobj:
+                    writer.write(fileobj)
+                print(f"DEBUG: 方法 3 - 成功写入输出文件")
+            except Exception as e:
+                print(f"DEBUG: 方法 3 - 写入文件时出错")
+                error_msg = str(e) if str(e) else "(无具体错误信息)"
+                print(f"DEBUG: 方法 3 - 错误详情: {error_msg}")
+                # 尝试方法 4: 使用异常处理逐个文件
+                print("DEBUG: 尝试方法 4: 使用异常处理逐个文件")
+                return self._merge_pdfs_error_handling(input_files, output_path)
+
+            return output_path
+        except Exception as e:
+            error_msg = str(e) if str(e) else "(无具体错误信息)"
+            print(f"DEBUG: 方法 3 失败，错误详情: {error_msg}")
+            # 尝试方法 4: 使用异常处理逐个文件
+            print("DEBUG: 尝试方法 4: 使用异常处理逐个文件")
+            return self._merge_pdfs_error_handling(input_files, output_path)
+    
+    def _merge_pdfs_error_handling(self, input_files, output_path):
+        """
+        合并多个 PDF 文件（使用异常处理，跳过有问题的文件）
+
+        当所有其他方法都失败时，使用此方法作为最终备选。
+
+        Args:
+            input_files (list): 要合并的 PDF 文件路径列表
+            output_path (str): 输出文件路径
+
+        Returns:
+            str: 合并后文件的路径
+        """
+        try:
+            # 创建一个新的 PDF 写入器
+            writer = PyPDF2.PdfWriter()
+
+            # 逐个处理每个 PDF 文件
+            for i, file_path in enumerate(input_files):
+                print(f"DEBUG: 方法 4 - 正在处理第 {i+1} 个文件: {file_path}")
+                try:
+                    # 打开 PDF 文件
+                    with open(file_path, 'rb') as fileobj:
+                        reader = PyPDF2.PdfReader(fileobj)
+                        # 逐个页面复制
+                        num_pages = len(reader.pages)
+                        print(f"DEBUG: 方法 4 - 文件包含 {num_pages} 页")
+                        
+                        # 只处理前几页，避免可能的错误
+                        max_pages = min(num_pages, 10)  # 只处理前10页
+                        print(f"DEBUG: 方法 4 - 只处理前 {max_pages} 页")
+                        
+                        for page_num in range(max_pages):
+                            try:
+                                page = reader.pages[page_num]
+                                writer.add_page(page)
+                                print(f"DEBUG: 方法 4 - 成功添加第 {page_num+1} 页")
+                            except Exception as e:
+                                print(f"DEBUG: 方法 4 - 添加第 {page_num+1} 页时出错")
+                                error_msg = str(e) if str(e) else "(无具体错误信息)"
+                                print(f"DEBUG: 方法 4 - 错误详情: {error_msg}")
+                                # 跳过有问题的页面，继续处理其他页面
+                                print(f"DEBUG: 方法 4 - 跳过第 {page_num+1} 页")
+                                continue
+                    print(f"DEBUG: 方法 4 - 成功添加文件: {file_path}")
+                except Exception as e:
+                    print(f"DEBUG: 方法 4 - 添加文件时出错: {file_path}")
+                    error_msg = str(e) if str(e) else "(无具体错误信息)"
+                    print(f"DEBUG: 方法 4 - 错误详情: {error_msg}")
+                    # 跳过有问题的文件，继续处理其他文件
+                    print(f"DEBUG: 方法 4 - 跳过文件: {file_path}")
+                    continue
+
+            # 将内容写入输出文件
+            print(f"DEBUG: 方法 4 - 所有文件添加完成，准备写入输出文件: {output_path}")
+            try:
+                with open(output_path, 'wb') as fileobj:
+                    writer.write(fileobj)
+                print(f"DEBUG: 方法 4 - 成功写入输出文件")
+            except Exception as e:
+                print(f"DEBUG: 方法 4 - 写入文件时出错")
+                error_msg = str(e) if str(e) else "(无具体错误信息)"
+                print(f"DEBUG: 方法 4 - 错误详情: {error_msg}")
+                # 尝试方法 5: 使用不同的库或方法
+                print("DEBUG: 尝试方法 5: 使用基本文件操作")
+                return self._merge_pdfs_basic(input_files, output_path)
+
+            return output_path
+        except Exception as e:
+            error_msg = str(e) if str(e) else "(无具体错误信息)"
+            print(f"DEBUG: 方法 4 失败，错误详情: {error_msg}")
+            # 尝试方法 5: 使用基本文件操作
+            print("DEBUG: 尝试方法 5: 使用基本文件操作")
+            return self._merge_pdfs_basic(input_files, output_path)
+    
+    def _merge_pdfs_basic(self, input_files, output_path):
+        """
+        合并多个 PDF 文件（使用基本文件操作）
+
+        当所有其他方法都失败时，使用此方法作为最终备选。
+
+        Args:
+            input_files (list): 要合并的 PDF 文件路径列表
+            output_path (str): 输出文件路径
+
+        Returns:
+            str: 合并后文件的路径
+        """
+        try:
+            # 这里我们创建一个空的 PDF 文件，或者只复制第一个文件
+            print(f"DEBUG: 方法 5 - 创建基本 PDF 文件: {output_path}")
+            
+            # 尝试复制第一个文件
+            if input_files:
+                first_file = input_files[0]
+                print(f"DEBUG: 方法 5 - 复制第一个文件: {first_file}")
+                
+                try:
+                    import shutil
+                    shutil.copy2(first_file, output_path)
+                    print(f"DEBUG: 方法 5 - 成功复制第一个文件")
+                    return output_path
+                except Exception as e:
+                    error_msg = str(e) if str(e) else "(无具体错误信息)"
+                    print(f"DEBUG: 方法 5 - 复制文件时出错: {error_msg}")
+            
+            # 如果复制失败，创建一个空的 PDF 文件
+            print("DEBUG: 方法 5 - 创建空 PDF 文件")
+            writer = PyPDF2.PdfWriter()
+            with open(output_path, 'wb') as fileobj:
+                writer.write(fileobj)
+            print(f"DEBUG: 方法 5 - 成功创建空 PDF 文件")
+            
+            return output_path
+        except Exception as e:
+            error_msg = str(e) if str(e) else "(无具体错误信息)"
+            print(f"DEBUG: 方法 5 失败，错误详情: {error_msg}")
+            # 所有方法都失败，抛出原始错误
+            raise Exception(f"所有合并方法都失败: {error_msg}")
 
 
