@@ -41,14 +41,8 @@ class SettingsPanel(ttk.LabelFrame):
         # 输出路径变量
         self.output_path_var = tk.StringVar()
 
-        # 保留章节完整性变量
-        self.preserve_chapter_var = tk.BooleanVar(value=False)
-        
         # 排除文件格式变量
         self.exclude_formats_var = tk.StringVar(value="")
-
-        # 高级选项展开状态
-        self.advanced_expanded = tk.BooleanVar(value=False)
 
         # 创建界面组件
         self.create_widgets()
@@ -148,37 +142,6 @@ class SettingsPanel(ttk.LabelFrame):
         ttk.Label(self.equal_frame, text="份", foreground='#888888').pack(side=tk.LEFT)
         row += 1
 
-        # ========== 高级选项区域（可折叠）==========
-        # 高级选项标题栏
-        advanced_header = ttk.Frame(self)
-        advanced_header.grid(row=row, column=0, columnspan=4, sticky=tk.W, padx=10, pady=(8, 0))
-
-        ttk.Label(advanced_header, text="高级选项", font=('TkDefaultFont', 9, 'bold')).pack(side=tk.LEFT)
-
-        # 展开/折叠按钮
-        self.advanced_button = ttk.Button(
-            advanced_header,
-            text="▼",
-            width=3,
-            command=self.toggle_advanced,
-            style='Toolbutton'
-        )
-        self.advanced_button.pack(side=tk.LEFT, padx=(10, 0))
-        row += 1
-
-        # 高级选项内容容器
-        self.advanced_frame = ttk.Frame(self)
-        self.advanced_frame.grid(row=row, column=0, columnspan=4, sticky=tk.W, padx=10, pady=(0, 8))
-
-        # 保留章节完整性选项
-        self.preserve_chapter_check = ttk.Checkbutton(
-            self.advanced_frame,
-            text="保留章节完整性（尽量不在章节中间分割）",
-            variable=self.preserve_chapter_var
-        )
-        self.preserve_chapter_check.pack(anchor=tk.W, pady=(0, 5))
-        
-
         row += 1
 
         # ========== 输出路径选择 ==========
@@ -200,8 +163,7 @@ class SettingsPanel(ttk.LabelFrame):
         )
         self.output_button.pack(side=tk.LEFT)
 
-        # 初始状态：展开高级选项，方便用户查看排除文件格式设置
-        self.toggle_advanced(force_collapse=False)
+        
 
     def toggle_advanced(self, force_collapse=False):
         """切换高级选项的展开/折叠状态
@@ -209,17 +171,8 @@ class SettingsPanel(ttk.LabelFrame):
         Args:
             force_collapse (bool): 是否强制折叠
         """
-        if force_collapse:
-            self.advanced_expanded.set(False)
-        else:
-            self.advanced_expanded.set(not self.advanced_expanded.get())
-
-        if self.advanced_expanded.get():
-            self.advanced_frame.grid()
-            self.advanced_button.config(text="▲")
-        else:
-            self.advanced_frame.grid_remove()
-            self.advanced_button.config(text="▼")
+        # 高级选项已移除
+        pass
 
     def on_mode_changed(self, *args):
         """分割模式变化时的回调函数
@@ -348,7 +301,6 @@ class SettingsPanel(ttk.LabelFrame):
             'mode': mode,  # 分割模式
             'value': value,  # 分割数值
             'output_path': self.output_path_var.get(),  # 输出路径
-            'preserve_chapter': self.preserve_chapter_var.get(),  # 保留章节完整性
             'exclude_formats': self.exclude_formats_var.get()  # 排除文件格式
         }
 
