@@ -536,14 +536,21 @@ class FileSelector(ttk.Frame):
         import re
         path_list = []
 
+        # 调试信息
+        print(f"[调试] 原始拖放数据: {files}")
+        print(f"[调试] 数据类型: {type(files)}")
+
         # 优先处理花括号包围的路径格式（Windows标准格式）
         if files.startswith('{') and files.endswith('}'):
+            print("[调试] 检测到花括号包围的格式")
             # 移除最外层的花括号
             files_content = files[1:-1]
+            print(f"[调试] 内部内容: {files_content}")
             
             # 尝试多种方式分割路径
             # 1. 尝试匹配内部的花括号包围的路径
             bracket_paths = re.findall(r'\{([^}]*)\}', files_content)
+            print(f"[调试] 匹配到的花括号路径: {bracket_paths}")
             
             if bracket_paths:
                 path_list = bracket_paths
@@ -557,6 +564,7 @@ class FileSelector(ttk.Frame):
                         cleaned = p.strip()
                         if cleaned:
                             cleaned_paths.append(cleaned)
+                    print(f"[调试] 按 '}} {{' 分割后的路径: {cleaned_paths}")
                     if cleaned_paths:
                         path_list = cleaned_paths
                 else:
@@ -566,23 +574,44 @@ class FileSelector(ttk.Frame):
         else:
             # 检查是否包含花括号（可能是不完整的花括号包围格式）
             if '{' in files or '}' in files:
+                print("[调试] 检测到包含花括号的格式")
                 # 尝试清理并分割路径
                 # 移除所有花括号
                 cleaned_files = files.replace('{', '').replace('}', '')
+                print(f"[调试] 移除花括号后的内容: {cleaned_files}")
                 
                 # 检查是否包含多个文件扩展名
                 extensions = ['.pdf', '.docx', '.txt', '.md']
                 extension_count = 0
                 for ext in extensions:
                     extension_count += cleaned_files.lower().count(ext)
+                print(f"[调试] 扩展名数量: {extension_count}")
                 
                 if extension_count > 1:
                     # 多个文件，尝试按扩展名分割
+                    # 改进正则表达式，支持包含中文和空格的完整路径
                     extension_pattern = '|'.join([re.escape(ext) for ext in extensions])
-                    path_pattern = rf'([^\s]+{extension_pattern})'
+                    # 匹配完整路径：从非空白字符开始，包含任意字符（包括空格和中文），直到遇到扩展名
+                    # 注意：这个正则表达式假设路径之间用空格分隔
+                    path_pattern = rf'([^\s].*?{extension_pattern})'
                     multi_paths = re.findall(path_pattern, cleaned_files)
+                    print(f"[调试] 分割后的多个路径: {multi_paths}")
+                    
                     if multi_paths:
-                        path_list = multi_paths
+                        # 清理分割后的路径
+                        cleaned_multi_paths = []
+                        for p in multi_paths:
+                            # 移除路径末尾的空格
+                            cleaned = p.strip()
+                            if cleaned:
+                                cleaned_multi_paths.append(cleaned)
+                        print(f"[调试] 清理后的多个路径: {cleaned_multi_paths}")
+                        
+                        if cleaned_multi_paths:
+                            path_list = cleaned_multi_paths
+                        else:
+                            # 尝试简单的空格分割
+                            path_list = cleaned_files.split()
                     else:
                         # 尝试简单的空格分割
                         path_list = cleaned_files.split()
@@ -592,6 +621,7 @@ class FileSelector(ttk.Frame):
             else:
                 # 尝试匹配用引号包围的路径
                 quoted_paths = re.findall(r'"([^"]*)"|\'([^\']*)\'', files)
+                print(f"[调试] 匹配到的引号路径: {quoted_paths}")
                 if quoted_paths:
                     # 如果找到引号包围的路径，使用这些路径
                     path_list = [match[0] or match[1] for match in quoted_paths if match[0] or match[1]]
@@ -599,6 +629,7 @@ class FileSelector(ttk.Frame):
                     # 尝试处理没有引号包围但包含空格的路径
                     # 检查是否包含常见文件扩展名
                     has_extension = any(ext in files.lower() for ext in ['.pdf', '.docx', '.txt', '.md'])
+                    print(f"[调试] 是否包含扩展名: {has_extension}")
                     
                     if has_extension:
                         # 检查是否包含多个文件扩展名（多个文件）
@@ -606,15 +637,33 @@ class FileSelector(ttk.Frame):
                         extension_count = 0
                         for ext in extensions:
                             extension_count += files.lower().count(ext)
+                        print(f"[调试] 扩展名数量: {extension_count}")
                         
                         if extension_count > 1:
                             # 多个文件，尝试按扩展名分割
+                            # 改进正则表达式，支持包含中文和空格的完整路径
                             extension_pattern = '|'.join([re.escape(ext) for ext in extensions])
-                            path_pattern = rf'([^\s]+{extension_pattern})'
+                            # 匹配完整路径：从非空白字符开始，包含任意字符（包括空格和中文），直到遇到扩展名
+                            # 注意：这个正则表达式假设路径之间用空格分隔
+                            path_pattern = rf'([^\s].*?{extension_pattern})'
                             multi_paths = re.findall(path_pattern, files)
+                            print(f"[调试] 分割后的多个路径: {multi_paths}")
                             
                             if multi_paths:
-                                path_list = multi_paths
+                                # 清理分割后的路径
+                                cleaned_multi_paths = []
+                                for p in multi_paths:
+                                    # 移除路径末尾的空格
+                                    cleaned = p.strip()
+                                    if cleaned:
+                                        cleaned_multi_paths.append(cleaned)
+                                print(f"[调试] 清理后的多个路径: {cleaned_multi_paths}")
+                                
+                                if cleaned_multi_paths:
+                                    path_list = cleaned_multi_paths
+                                else:
+                                    # 如果正则表达式分割失败，尝试简单的空格分割
+                                    path_list = files.split()
                             else:
                                 # 如果正则表达式分割失败，尝试简单的空格分割
                                 path_list = files.split()
@@ -624,15 +673,22 @@ class FileSelector(ttk.Frame):
                     else:
                         # 否则按空格分割（适用于多个简单路径）
                         path_list = files.split()
+        
+        print(f"[调试] 最终路径列表: {path_list}")
 
         # 处理所有路径（可能是文件或文件夹）
         valid_files = []
         unsupported_items = []
 
+        print("[调试] 开始处理路径列表")
+
         for path in path_list:
             path = path.strip()
 
+            print(f"[调试] 处理路径: {path}")
+
             if not path:
+                print("[调试] 路径为空，跳过")
                 continue
 
             # 尝试多种路径处理方法
@@ -644,20 +700,30 @@ class FileSelector(ttk.Frame):
                 decoded_path = urllib.parse.unquote(path)
                 if decoded_path != path:
                     processed_paths.append(decoded_path)
-            except:
+                    print(f"[调试] 添加解码路径: {decoded_path}")
+            except Exception as e:
+                print(f"[调试] URL解码失败: {e}")
                 pass
+
+            print(f"[调试] 处理的路径列表: {processed_paths}")
 
             # 尝试处理所有可能的路径
             path_valid = False
             for processed_path in processed_paths:
                 try:
+                    print(f"[调试] 尝试处理路径: {processed_path}")
+                    
                     # 尝试规范化路径
                     normalized_path = Path(processed_path).resolve()
                     path_str = str(normalized_path)
+                    print(f"[调试] 规范化后的路径: {path_str}")
 
                     # 检查路径是否存在
                     if Path(path_str).exists():
+                        print(f"[调试] 路径存在: {path_str}")
+                        
                         if Path(path_str).is_file():
+                            print(f"[调试] 是文件: {path_str}")
                             # 如果是文件，验证文件类型
                             file_ext = Path(path_str).suffix.lower()
                             supported_extensions = ['.pdf', '.docx', '.txt', '.md']
@@ -665,35 +731,54 @@ class FileSelector(ttk.Frame):
                             # 获取排除的文件格式
                             excluded_formats = self.get_excluded_formats()
 
+                            print(f"[调试] 文件扩展名: {file_ext}")
+                            print(f"[调试] 支持的扩展名: {supported_extensions}")
+                            print(f"[调试] 排除的格式: {excluded_formats}")
+                            print(f"[调试] 是否支持: {file_ext in supported_extensions}")
+                            print(f"[调试] 是否被排除: {file_ext in excluded_formats}")
+
                             if file_ext in supported_extensions and file_ext not in excluded_formats:
                                 valid_files.append(path_str)
                                 path_valid = True
+                                print(f"[调试] 添加到有效文件: {path_str}")
                                 break
                             else:
                                 unsupported_items.append(path_str)
                                 path_valid = True  # 路径存在但不支持
+                                print(f"[调试] 添加到不支持项: {path_str}")
                                 break
                         elif Path(path_str).is_dir():
+                            print(f"[调试] 是目录: {path_str}")
                             # 如果是目录，扫描目录中的所有支持的文件
                             dir_valid_files = self.scan_directory_for_supported_files(path_str)
+                            print(f"[调试] 目录中的支持文件: {dir_valid_files}")
                             if dir_valid_files:
                                 valid_files.extend(dir_valid_files)
                                 path_valid = True
+                                print(f"[调试] 添加目录中的文件: {len(dir_valid_files)} 个")
                                 break
                             else:
                                 unsupported_items.append(path_str)
                                 path_valid = True  # 路径存在但目录中没有支持的文件
+                                print(f"[调试] 目录中没有支持的文件: {path_str}")
                                 break
                     else:
                         # 路径不存在，继续尝试其他处理方法
+                        print(f"[调试] 路径不存在: {path_str}")
                         continue
                 except Exception as e:
                     # 路径处理出错，继续尝试其他方法
+                    print(f"[调试] 路径处理出错: {e}")
                     continue
 
             # 如果所有处理方法都失败，将路径添加到不支持列表
             if not path_valid:
                 unsupported_items.append(path)
+                print(f"[调试] 所有处理方法失败，添加到不支持项: {path}")
+
+        print("[调试] 处理完成")
+        print(f"[调试] 有效文件: {valid_files}")
+        print(f"[调试] 不支持项: {unsupported_items}")
 
         # 更新文件列表（清除之前的文件）
         self.selected_files = valid_files
