@@ -492,7 +492,7 @@ class PDFSplitter:
         """
         合并多个 PDF 文件
 
-        该方法将多个 PDF 文件合并为一个单一的 PDF 文件。
+        该方法将多个 PDF 文件合并为一个单一的 PDF 文件，并保留原始书签。
 
         Args:
             input_files (list): 要合并的 PDF 文件路径列表
@@ -523,16 +523,114 @@ class PDFSplitter:
         # 创建 PDF 写入器对象
         writer = PyPDF2.PdfWriter()
 
+        # 页面偏移量，用于调整书签页码
+        page_offset = 0
+
         # 合并所有 PDF 文件
         for file_path in input_files:
             with open(file_path, 'rb') as file:
                 reader = PyPDF2.PdfReader(file)
+                
                 # 将所有页面添加到写入器
                 for page in reader.pages:
                     writer.add_page(page)
+                
+                # 复制书签（如果有）
+                try:
+                    # 尝试获取大纲（书签）
+                    outline = None
+                    if hasattr(reader, 'outline'):
+                        # PyPDF2 3.0.0+ 版本
+                        outline = reader.outline
+                    elif hasattr(reader, 'outlines'):
+                        # PyPDF2 2.x 版本
+                        outline = reader.outlines
+                    
+                    if outline:
+                        # 处理书签
+                        self._copy_bookmarks_simple(outline, writer, page_offset)
+                except Exception as e:
+                    print(f"处理书签时出错: {e}")
+                
+                # 更新页面偏移量
+                page_offset += len(reader.pages)
 
         # 将内容写入输出文件
         with open(output_path, 'wb') as output_file:
             writer.write(output_file)
 
         return output_path
+
+    def _copy_bookmarks_simple(self, outline, writer, page_offset, parent=None):
+        """
+        简单的书签复制方法
+
+        该方法递归处理书签树，并为每个书签创建一个新的书签，调整页码偏移。
+
+        Args:
+            outline: 书签大纲对象
+            writer: PDF 写入器对象
+            page_offset: 页面偏移量
+            parent: 父书签对象
+        """
+        # 处理列表类型的大纲（多个书签）
+        if isinstance(outline, list):
+            for item in outline:
+                self._copy_bookmarks_simple(item, writer, page_offset, parent)
+            return
+        
+        # 处理元组类型的书签
+        if isinstance(outline, tuple):
+            title, page_obj, *rest = outline
+            
+            try:
+                # 尝试获取页码
+                page_num = 0
+                if hasattr(page_obj, 'page_number'):
+                    page_num = page_obj.page_number
+                elif isinstance(page_obj, int):
+                    page_num = page_obj
+                
+                # 调整页码（处理从1开始的页码）
+                if page_num > 0:
+                    page_num -= 1
+                
+                # 计算目标页码
+                target_page = page_num + page_offset
+                
+                # 创建新书签
+                new_parent = writer.add_outline_item(title, target_page, parent=parent)
+                
+                # 处理子书签
+                if rest and len(rest) > 0:
+                    for item in rest:
+                        if isinstance(item, (list, tuple)):
+                            self._copy_bookmarks_simple(item, writer, page_offset, new_parent)
+            except Exception as e:
+                print(f"处理书签项时出错: {e}")
+        
+        # 处理对象类型的书签（某些 PyPDF2 版本）
+        elif hasattr(outline, 'title') and hasattr(outline, 'page'):
+            title = outline.title
+            
+            try:
+                # 尝试获取页码
+                page_num = 0
+                if hasattr(outline.page, 'page_number'):
+                    page_num = outline.page.page_number
+                
+                # 调整页码（处理从1开始的页码）
+                if page_num > 0:
+                    page_num -= 1
+                
+                # 计算目标页码
+                target_page = page_num + page_offset
+                
+                # 创建新书签
+                new_parent = writer.add_outline_item(title, target_page, parent=parent)
+                
+                # 处理子书签
+                if hasattr(outline, 'children') and outline.children:
+                    self._copy_bookmarks_simple(outline.children, writer, page_offset, new_parent)
+            except Exception as e:
+                print(f"处理书签对象时出错: {e}")
