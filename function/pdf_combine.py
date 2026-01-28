@@ -65,18 +65,40 @@ class PDFCombiner:
             merger = PyPDF2.PdfMerger()
             expected_bookmarks = 0
 
+            # 分析每个文件的书签结构
+            problematic_files = []
+            bookmark_analysis_results = []
+            
             for i, file_path in enumerate(input_files):
                 print(f"DEBUG: 正在处理第 {i+1} 个文件: {file_path}")
-                with open(file_path, 'rb') as f:
-                    reader = PyPDF2.PdfReader(f)
-                    # 统计原始书签
-                    count = self._count_bookmarks(reader.outline)
-                    expected_bookmarks += count
-                    print(f"DEBUG: 文件 {file_path} 包含 {count} 个书签")
+                
+                # 分析文件的书签结构
+                analysis_result = self._analyze_file_bookmarks(file_path)
+                bookmark_analysis_results.append(analysis_result)
+                
+                # 打印分析结果
+                print(f"DEBUG: 文件 {file_path} 分析结果:")
+                print(f"DEBUG:   包含书签: {analysis_result['has_bookmarks']}")
+                print(f"DEBUG:   书签数量: {analysis_result['bookmark_count']}")
+                
+                if analysis_result.get('warning'):
+                    print(f"DEBUG:   警告: {analysis_result['warning']}")
+                
+                if analysis_result.get('error'):
+                    print(f"DEBUG:   错误: {analysis_result['error']}")
+                
+                if analysis_result.get('specific_issues'):
+                    print(f"DEBUG:   具体问题: {', '.join(analysis_result['specific_issues'])}")
+                
+                # 统计原始书签
+                expected_bookmarks += analysis_result['bookmark_count']
                 
                 # 尝试导入
                 merger.append(file_path, import_outline=True)
                 print(f"DEBUG: 成功添加文件: {file_path}")
+            
+            # 如果发现可能有问题的文件，打印警告
+            # 注意：这里不再直接构建 problematic_files，而是在诊断阶段通过 analysis_results 构建
 
             with open(output_path, 'wb') as fileobj:
                 merger.write(fileobj)
@@ -93,11 +115,35 @@ class PDFCombiner:
                 if os.path.exists(output_path):
                     os.remove(output_path)
                     print(f"DEBUG: 删除无效文件: {output_path}")
-                # 触发自定义异常：书签丢失
-                raise RuntimeError(
+                
+                # 诊断书签丢失的具体原因
+                diagnosis = self._diagnose_bookmark_loss(input_files, bookmark_analysis_results)
+                
+                # 构建详细的错误信息
+                error_message = (
                     f"书签丢失校验失败：预期包含 {expected_bookmarks} 个书签，" 
-                    f"但生成的 PDF 实际包含 0 个。可能是由于源文件书签格式不规范或 PdfMerger 兼容性问题。"
+                    f"但生成的 PDF 实际包含 0 个。\n\n"
                 )
+                
+                # 添加具体的诊断结果
+                error_message += "=== 具体诊断结果 ===\n"
+                error_message += f"诊断结果: {diagnosis['conclusion']}\n\n"
+                
+                # 添加可能的问题文件信息
+                if diagnosis['problematic_files']:
+                    error_message += "可能导致问题的文件：\n"
+                    for file_path, issues in diagnosis['problematic_files'][:3]:  # 只显示前3个问题文件
+                        file_name = os.path.basename(file_path)
+                        error_message += f"- {file_name}: {', '.join(issues)}\n"
+                    if len(diagnosis['problematic_files']) > 3:
+                        error_message += f"... 等 {len(diagnosis['problematic_files']) - 3} 个文件\n\n"
+                
+                # 添加具体的解决方案
+                error_message += "=== 具体解决方案 ===\n"
+                error_message += "\n".join(diagnosis['solutions'])
+                
+                # 触发自定义异常：书签丢失
+                raise RuntimeError(error_message)
             
             self.last_used_method = "1"
             self.last_used_method_name = "PyPDF2（保留书签）"
@@ -135,6 +181,218 @@ class PDFCombiner:
             else:
                 count += 1
         return count
+
+    def _analyze_bookmark_structure(self, outline, level=0):
+        """
+        分析书签结构，返回详细信息
+
+        Args:
+            outline: PDF 大纲对象
+            level: 当前分析的层级
+
+        Returns:
+            dict: 包含书签结构详细信息的字典
+        """
+        if not outline:
+            return {
+                "count": 0,
+                "max_depth": 0,
+                "structure": []
+            }
+        
+        structure = []
+        max_depth = level
+        total_count = 0
+        
+        for i, item in enumerate(outline):
+            if isinstance(item, list):
+                # 嵌套书签
+                sub_analysis = self._analyze_bookmark_structure(item, level + 1)
+                structure.append({
+                    "type": "nested",
+                    "index": i,
+                    "level": level,
+                    "children": sub_analysis["structure"]
+                })
+                total_count += sub_analysis["count"]
+                max_depth = max(max_depth, sub_analysis["max_depth"])
+            else:
+                # 单个书签
+                bookmark_info = {
+                    "type": "bookmark",
+                    "index": i,
+                    "level": level
+                }
+                # 尝试获取书签标题
+                try:
+                    if hasattr(item, "title"):
+                        bookmark_info["title"] = item.title
+                    elif isinstance(item, tuple) and len(item) > 0:
+                        bookmark_info["title"] = str(item[0]) if item[0] else "(无标题)"
+                    else:
+                        bookmark_info["title"] = "(未知格式)"
+                except Exception as e:
+                    bookmark_info["title"] = "(获取标题失败)"
+                
+                structure.append(bookmark_info)
+                total_count += 1
+        
+        return {
+            "count": total_count,
+            "max_depth": max_depth,
+            "structure": structure
+        }
+
+    def _analyze_file_bookmarks(self, file_path):
+        """
+        分析单个文件的书签情况
+
+        Args:
+            file_path: 文件路径
+
+        Returns:
+            dict: 包含文件书签分析结果的字典
+        """
+        result = {
+            "file_path": file_path,
+            "has_bookmarks": False,
+            "bookmark_count": 0,
+            "structure_analysis": None,
+            "error": None,
+            "warning": None,
+            "specific_issues": []  # 新增：具体问题列表
+        }
+        
+        try:
+            with open(file_path, 'rb') as f:
+                reader = PyPDF2.PdfReader(f)
+                
+                # 检查是否有 outline 属性
+                if not hasattr(reader, 'outline'):
+                    result["error"] = "文件没有 outline 属性"
+                    result["specific_issues"].append("无 outline 属性")
+                    return result
+                
+                outline = reader.outline
+                if not outline:
+                    result["has_bookmarks"] = False
+                    result["bookmark_count"] = 0
+                    return result
+                
+                # 分析书签结构
+                structure_analysis = self._analyze_bookmark_structure(outline)
+                result["has_bookmarks"] = True
+                result["bookmark_count"] = structure_analysis["count"]
+                result["structure_analysis"] = structure_analysis
+                
+                # 检查是否可能存在问题
+                if structure_analysis["max_depth"] > 10:
+                    result["warning"] = f"书签嵌套层级较深 ({structure_analysis['max_depth']} 层)，可能导致合并问题"
+                    result["specific_issues"].append(f"嵌套层级过深 ({structure_analysis['max_depth']} 层)")
+                
+                # 检查书签标题是否有特殊字符
+                problematic_bookmarks = []
+                self._check_bookmark_titles(structure_analysis["structure"], problematic_bookmarks)
+                
+                if problematic_bookmarks:
+                    result["warning"] = f"发现 {len(problematic_bookmarks)} 个可能包含特殊字符的书签"
+                    result["specific_issues"].append(f"包含 {len(problematic_bookmarks)} 个特殊字符书签")
+                    
+        except Exception as e:
+            result["error"] = f"分析书签时出错: {str(e)}"
+            result["specific_issues"].append(f"分析错误: {str(e)}")
+        
+        return result
+
+    def _check_bookmark_titles(self, structure, problematic_bookmarks):
+        """
+        检查书签标题是否包含特殊字符
+
+        Args:
+            structure: 书签结构
+            problematic_bookmarks: 收集有问题的书签
+        """
+        for item in structure:
+            if item["type"] == "bookmark":
+                title = item.get("title", "")
+                if title and any(ord(c) < 32 or ord(c) > 126 for c in title):
+                    problematic_bookmarks.append(title)
+            elif item["type"] == "nested":
+                self._check_bookmark_titles(item["children"], problematic_bookmarks)
+
+    def _diagnose_bookmark_loss(self, input_files, analysis_results):
+        """
+        诊断书签丢失的具体原因
+
+        Args:
+            input_files: 输入文件列表
+            analysis_results: 每个文件的书签分析结果
+
+        Returns:
+            dict: 包含诊断结论、问题文件和解决方案的字典
+        """
+        # 分析结果
+        problematic_files = []
+        possible_causes = []
+        solutions = []
+        
+        # 分析每个文件的结果
+        for i, result in enumerate(analysis_results):
+            file_path = input_files[i]
+            issues = []
+            
+            if result.get('specific_issues'):
+                issues.extend(result['specific_issues'])
+                
+                # 提取可能的原因
+                for issue in result['specific_issues']:
+                    if "嵌套层级过深" in issue:
+                        possible_causes.append("书签嵌套层级过深")
+                    elif "特殊字符" in issue:
+                        possible_causes.append("书签标题包含特殊字符")
+                    elif "分析错误" in issue:
+                        possible_causes.append("文件书签结构错误")
+                    elif "无 outline 属性" in issue:
+                        possible_causes.append("文件书签结构错误")
+            
+            if issues:
+                problematic_files.append((file_path, issues))
+        
+        # 确定主要原因
+        if not possible_causes:
+            conclusion = "无法确定具体原因，可能是 PyPDF2 兼容性问题或其他未知因素"
+            possible_causes.append("PyPDF2 版本兼容性问题")
+        else:
+            # 统计最常见的原因
+            from collections import Counter
+            cause_counter = Counter(possible_causes)
+            most_common_cause = cause_counter.most_common(1)[0][0]
+            conclusion = f"主要原因：{most_common_cause}"
+        
+        # 生成具体的解决方案
+        if "书签嵌套层级过深" in possible_causes:
+            solutions.append("1. 简化源文件的书签结构，减少嵌套层级")
+            solutions.append("2. 尝试使用最新版本的 PyPDF2，可能对深层嵌套有更好的支持")
+        if "书签标题包含特殊字符" in possible_causes:
+            solutions.append("1. 清理书签标题中的特殊字符或非 ASCII 字符")
+            solutions.append("2. 尝试使用 pypdf（PyPDF2 的继任者），对特殊字符支持更好")
+        if "文件书签结构错误" in possible_causes:
+            solutions.append("1. 使用 Adobe Acrobat 重新保存文件，标准化书签结构")
+            solutions.append("2. 尝试从问题文件中提取内容到新的 PDF 文件")
+        if "PyPDF2 版本兼容性问题" in possible_causes or not possible_causes:
+            solutions.append("1. 更新 PyPDF2 到最新版本：pip install --upgrade PyPDF2")
+            solutions.append("2. 尝试使用 pypdf：pip install pypdf")
+            solutions.append("3. 考虑使用其他 PDF 合并工具作为临时解决方案")
+        
+        # 添加通用解决方案
+        solutions.append("4. 检查源文件是否有权限或加密限制")
+        solutions.append("5. 尝试使用在线 PDF 合并工具（如 SmallPDF、ILovePDF 等）")
+        
+        return {
+            "conclusion": conclusion,
+            "problematic_files": problematic_files,
+            "solutions": solutions
+        }
 
     def _merge_pdfs_no_outline(self, input_files, output_path):
         """
