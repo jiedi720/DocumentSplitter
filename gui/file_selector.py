@@ -548,25 +548,26 @@ class FileSelector(ttk.Frame):
             print(f"[调试] 内部内容: {files_content}")
             
             # 尝试多种方式分割路径
-            # 1. 尝试匹配内部的花括号包围的路径
-            bracket_paths = re.findall(r'\{([^}]*)\}', files_content)
-            print(f"[调试] 匹配到的花括号路径: {bracket_paths}")
-            
-            if bracket_paths:
-                path_list = bracket_paths
+            # 1. 尝试按 '} {' 分割（常见的多文件格式）
+            if '} {' in files_content:
+                print("[调试] 检测到 '}} {{' 分割格式")
+                split_paths = files_content.split('} {')
+                # 清理每个路径
+                cleaned_paths = []
+                for p in split_paths:
+                    cleaned = p.strip()
+                    if cleaned:
+                        cleaned_paths.append(cleaned)
+                print(f"[调试] 按 '}} {{' 分割后的路径: {cleaned_paths}")
+                if cleaned_paths:
+                    path_list = cleaned_paths
             else:
-                # 2. 尝试按 '} {' 分割（常见的多文件格式）
-                if '} {' in files_content:
-                    split_paths = files_content.split('} {')
-                    # 清理每个路径
-                    cleaned_paths = []
-                    for p in split_paths:
-                        cleaned = p.strip()
-                        if cleaned:
-                            cleaned_paths.append(cleaned)
-                    print(f"[调试] 按 '}} {{' 分割后的路径: {cleaned_paths}")
-                    if cleaned_paths:
-                        path_list = cleaned_paths
+                # 2. 尝试匹配内部的花括号包围的路径
+                bracket_paths = re.findall(r'\{([^}]*)\}', files_content)
+                print(f"[调试] 匹配到的花括号路径: {bracket_paths}")
+                
+                if bracket_paths:
+                    path_list = bracket_paths
                 else:
                     # 3. 尝试按空格分割，但要注意路径中的空格
                     # 这种情况可能是单文件路径，包含空格但没有被正确包围
