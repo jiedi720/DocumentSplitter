@@ -420,88 +420,79 @@ class MainApplication:
 
             if file_type == '.pdf':
                 if settings['mode'] == 'pages':
-                    self.log_message(f"开始按页数分割 PDF 文件，每份 {settings['value']} 页" +
-                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
+                    self.log_message(f"开始按页数分割 PDF 文件，每份 {settings['value']} 页")
                     output_files = self.pdf_splitter.split_by_pages(
                         file_path,
                         settings['value'],
                         settings['output_path'],
-                        settings.get('preserve_chapter', False)
+                        False
                     )
                 elif settings['mode'] == 'chars':
-                    self.log_message(f"开始按字符数分割 PDF 文件，每份 {settings['value']} 字符" +
-                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
+                    self.log_message(f"开始按字符数分割 PDF 文件，每份 {settings['value']} 字符")
                     output_files = self.pdf_splitter.split_by_chars(
                         file_path,
                         settings['value'],
                         settings['output_path'],
-                        settings.get('preserve_chapter', False)
+                        False
                     )
                 elif settings['mode'] == 'equal':
-                    self.log_message(f"开始均分 PDF 文件，共分割为 {settings['value']} 份" +
-                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
+                    self.log_message(f"开始均分 PDF 文件，共分割为 {settings['value']} 份")
                     output_files = self.pdf_splitter.split_by_equal_parts(
                         file_path,
                         settings['value'],
                         settings['output_path'],
-                        settings.get('preserve_chapter', False)
+                        False
                     )
             elif file_type == '.docx':
                 if settings['mode'] == 'equal':
-                    self.log_message(f"开始均分 Word 文件，共分割为 {settings['value']} 份" +
-                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
+                    self.log_message(f"开始均分 Word 文件，共分割为 {settings['value']} 份")
                     output_files = self.word_splitter.split_by_equal_parts(
                         file_path,
                         settings['value'],
                         settings['output_path'],
-                        settings.get('preserve_chapter', False)
+                        False
                     )
                 else:  # 默认按字符数分割
-                    self.log_message(f"开始按字符数分割 Word 文件，每份 {settings['value']} 字符" +
-                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
+                    self.log_message(f"开始按字符数分割 Word 文件，每份 {settings['value']} 字符")
                     output_files = self.word_splitter.split_by_chars(
                         file_path,
                         settings['value'],
                         settings['output_path'],
-                        settings.get('preserve_chapter', False)
+                        False
                     )
             elif file_type == '.txt':
                 if settings['mode'] == 'equal':
-                    self.log_message(f"开始均分 TXT 文件，共分割为 {settings['value']} 份" +
-                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
+                    self.log_message(f"开始均分 TXT 文件，共分割为 {settings['value']} 份")
                     output_files = self.txt_splitter.split_by_equal_parts(
                         file_path,
                         settings['value'],
                         settings['output_path'],
-                        settings.get('preserve_chapter', False)
+                        False
                     )
                 else:  # 默认按字符数分割
-                    self.log_message(f"开始按字符数分割 TXT 文件，每份 {settings['value']} 字符" +
-                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
+                    self.log_message(f"开始按字符数分割 TXT 文件，每份 {settings['value']} 字符")
                     output_files = self.txt_splitter.split_by_chars(
                         file_path,
                         settings['value'],
                         settings['output_path'],
-                        settings.get('preserve_chapter', False)
+                        False
                     )
             elif file_type == '.md':
                 if settings['mode'] == 'equal':
-                    self.log_message(f"开始均分 Markdown 文件，共分割为 {settings['value']} 份" +
-                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
+                    self.log_message(f"开始均分 Markdown 文件，共分割为 {settings['value']} 份")
                     output_files = self.md_splitter.split_by_equal_parts(
                         file_path,
                         settings['value'],
                         settings['output_path'],
-                        settings.get('preserve_chapter', False)
+                        False
                     )
                 else:  # 默认按字符数分割
-                    self.log_message(f"开始按字符数分割 Markdown 文件，每份 {settings['value']} 字符" +
-                                    ("，保留章节完整性" if settings.get('preserve_chapter') else ""))
+                    self.log_message(f"开始按字符数分割 Markdown 文件，每份 {settings['value']} 字符")
                     output_files = self.md_splitter.split_by_chars(
                         file_path,
                         settings['value'],
                         settings['output_path'],
-                        settings.get('preserve_chapter', False)
+                        False
                     )
 
             # 检查操作是否被用户取消
@@ -875,9 +866,6 @@ class MainApplication:
                 # 设置均分份数
                 if "equal_value" in split_settings:
                     self.settings_panel.equal_var.set(split_settings["equal_value"])
-                # 设置保留章节完整性
-                if "preserve_chapter" in split_settings:
-                    self.settings_panel.preserve_chapter_var.set(split_settings["preserve_chapter"])
 
             
             # 应用路径设置
@@ -907,7 +895,6 @@ class MainApplication:
             config = {
                 "SplitSettings": {
                     "mode": self.settings_panel.mode_var.get(),
-                    "preserve_chapter": self.settings_panel.preserve_chapter_var.get(),
                     "chars_value": self.settings_panel.chars_var.get(),
                     "pages_value": self.settings_panel.pages_var.get(),
                     "equal_value": self.settings_panel.equal_var.get(),
