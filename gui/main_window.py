@@ -26,6 +26,7 @@ sys.path.append(str(project_root))
 
 from function.file_handler import FileHandler
 from function.pdf_splitter import PDFSplitter
+from function.pdf_combine import PDFCombiner
 from function.word_splitter import WordSplitter
 from function.txt_splitter import TxtSplitter
 from function.md_splitter import MdSplitter
@@ -74,6 +75,7 @@ class MainApplication:
         # 初始化功能模块
         self.file_handler = FileHandler()
         self.pdf_splitter = PDFSplitter()
+        self.pdf_combiner = PDFCombiner()
         self.word_splitter = WordSplitter()
         self.txt_splitter = TxtSplitter()
         self.md_splitter = MdSplitter()
@@ -624,7 +626,7 @@ class MainApplication:
 
             if file_type == '.pdf':
                 self.log_message(f"开始合并 {len(input_files)} 个 PDF 文件")
-                output_file = self.pdf_splitter.merge_pdfs(input_files)
+                output_file = self.pdf_combiner.merge_pdfs(input_files)
             elif file_type == '.docx':
                 self.log_message(f"开始合并 {len(input_files)} 个 Word 文件")
                 output_file = self.word_splitter.merge_docs(input_files)
