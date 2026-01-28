@@ -24,7 +24,7 @@ class PDFCombiner:
         """
         self.file_handler = FileHandler()
 
-    def merge_pdfs(self, input_files, output_path=None):
+    def merge_pdfs(self, input_files, output_path=None, try_fallback=True):
         """
         合并多个 PDF 文件
 
@@ -33,6 +33,7 @@ class PDFCombiner:
         Args:
             input_files (list): 要合并的 PDF 文件路径列表
             output_path (str, optional): 输出文件路径，默认为自动生成
+            try_fallback (bool, optional): 是否在带书签的方法失败时尝试其他方法，默认为 True
 
         Returns:
             str: 合并后文件的路径
@@ -40,6 +41,7 @@ class PDFCombiner:
         Raises:
             FileNotFoundError: 当输入文件不存在时抛出
             ValueError: 当文件格式不正确或输入列表为空时抛出
+            Exception: 当带书签的方法失败且 try_fallback 为 False 时抛出
         """
         # 验证输入文件列表
         if not input_files:
@@ -63,9 +65,19 @@ class PDFCombiner:
             merger = PyPDF2.PdfMerger()
 
             # 合并所有 PDF 文件
+            total_bookmarks = 0
             for i, file_path in enumerate(input_files):
                 print(f"DEBUG: 正在处理第 {i+1} 个文件: {file_path}")
                 try:
+                    # 检查文件的书签数量
+                    with open(file_path, 'rb') as f:
+                        reader = PyPDF2.PdfReader(f)
+                        # 获取大纲（书签）数量
+                        bookmarks = reader.outline if hasattr(reader, 'outline') else []
+                        bookmark_count = len(bookmarks) if bookmarks else 0
+                        print(f"DEBUG: 文件 {file_path} 包含 {bookmark_count} 个书签")
+                        total_bookmarks += bookmark_count
+                    
                     # import_outline=True 是关键，它会自动保留并调整原有的书签页码
                     merger.append(file_path, import_outline=True)
                     print(f"DEBUG: 成功添加文件: {file_path}")
@@ -77,26 +89,40 @@ class PDFCombiner:
 
             # 将内容写入输出文件
             print(f"DEBUG: 所有文件添加完成，准备写入输出文件: {output_path}")
+            print(f"DEBUG: 预计合并后的总书签数: {total_bookmarks}")
             try:
                 with open(output_path, 'wb') as fileobj:
                     merger.write(fileobj)
                 print(f"DEBUG: 成功写入输出文件")
+                
+                # 检查合并后文件的实际书签数量
+                with open(output_path, 'rb') as f:
+                    final_reader = PyPDF2.PdfReader(f)
+                    final_bookmarks = final_reader.outline if hasattr(final_reader, 'outline') else []
+                    final_bookmark_count = len(final_bookmarks) if final_bookmarks else 0
+                    print(f"DEBUG: 合并后文件实际包含 {final_bookmark_count} 个书签")
+                print(f"DEBUG: 使用方法 1: PyPDF2（保留书签）合并成功")
             except Exception as e:
                 print(f"DEBUG: 写入文件时出错")
                 error_msg = str(e) if str(e) else "(无具体错误信息)"
                 print(f"DEBUG: 错误详情: {error_msg}")
-                # 尝试方法 2: 不保留书签
-                print("DEBUG: 尝试方法 2: 不保留书签")
                 # 关闭合并器，释放资源
                 merger.close()
+                if not try_fallback:
+                    raise
+                # 尝试方法 2: 不保留书签
+                print("DEBUG: 尝试方法 2: 不保留书签")
                 return self._merge_pdfs_no_outline(input_files, output_path)
             
             # 关闭合并器，释放资源
             merger.close()
 
+            print(f"DEBUG: 使用方法 1: PyPDF2（保留书签）合并成功")
             return output_path
         except Exception as e:
             print(f"DEBUG: 方法 1 失败，错误详情: {str(e)}")
+            if not try_fallback:
+                raise
             # 尝试方法 2: 不保留书签
             print("DEBUG: 尝试方法 2: 不保留书签")
             return self._merge_pdfs_no_outline(input_files, output_path)
@@ -147,6 +173,7 @@ class PDFCombiner:
             # 关闭合并器，释放资源
             merger.close()
 
+            print(f"DEBUG: 使用方法 2: 不保留书签合并成功")
             return output_path
         except Exception as e:
             error_msg = str(e) if str(e) else "(无具体错误信息)"
@@ -217,6 +244,7 @@ class PDFCombiner:
                 print("DEBUG: 尝试方法 4: 使用异常处理逐个文件")
                 return self._merge_pdfs_error_handling(input_files, output_path)
 
+            print(f"DEBUG: 使用方法 3: 逐个页面复制合并成功")
             return output_path
         except Exception as e:
             error_msg = str(e) if str(e) else "(无具体错误信息)"
@@ -292,6 +320,7 @@ class PDFCombiner:
                 print("DEBUG: 尝试方法 5: 使用基本文件操作")
                 return self._merge_pdfs_basic(input_files, output_path)
 
+            print(f"DEBUG: 使用方法 4: 异常处理逐个文件合并成功")
             return output_path
         except Exception as e:
             error_msg = str(e) if str(e) else "(无具体错误信息)"
@@ -326,6 +355,7 @@ class PDFCombiner:
                     import shutil
                     shutil.copy2(first_file, output_path)
                     print(f"DEBUG: 方法 5 - 成功复制第一个文件")
+                    print(f"DEBUG: 使用方法 5: 基本文件操作合并成功")
                     return output_path
                 except Exception as e:
                     error_msg = str(e) if str(e) else "(无具体错误信息)"
@@ -337,7 +367,7 @@ class PDFCombiner:
             with open(output_path, 'wb') as fileobj:
                 writer.write(fileobj)
             print(f"DEBUG: 方法 5 - 成功创建空 PDF 文件")
-            
+            print(f"DEBUG: 使用方法 5: 基本文件操作合并成功")
             return output_path
         except Exception as e:
             error_msg = str(e) if str(e) else "(无具体错误信息)"

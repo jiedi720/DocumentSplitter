@@ -612,8 +612,31 @@ class MainApplication:
             output_file = ""
 
             if file_type == '.pdf':
-                self.log_message(f"开始合并 {len(input_files)} 个 PDF 文件")
-                output_file = self.pdf_combiner.merge_pdfs(input_files)
+                self.log_message(f"开始合并 {len(input_files)} 个 PDF 文件（保留书签）")
+                # 首先尝试带书签的方法
+                merge_method = "其他方法"
+                try:
+                    output_file = self.pdf_combiner.merge_pdfs(input_files, try_fallback=False)
+                    merge_method = "PyPDF2（保留书签）"
+                except Exception as e:
+                    # 带书签的方法失败，弹出确认框
+                    error_msg = f"保留书签的合并方法失败: {str(e)}"
+                    self.log_message(error_msg)
+                    
+                    # 弹出确认框，询问是否使用其他方法
+                    user_choice = messagebox.askyesno(
+                        "合并方法失败",
+                        f"带书签的合并方法失败:\n{str(e)}\n\n是否尝试使用其他方法合并 PDF（可能不保留书签）？"
+                    )
+                    
+                    if user_choice:
+                        # 用户选择继续，使用带回退的方法
+                        self.log_message("用户选择尝试其他合并方法")
+                        output_file = self.pdf_combiner.merge_pdfs(input_files, try_fallback=True)
+                    else:
+                        # 用户选择取消
+                        self.log_message("用户取消合并操作")
+                        return
             elif file_type == '.docx':
                 self.log_message(f"开始合并 {len(input_files)} 个 Word 文件")
                 output_file = self.word_splitter.merge_docs(input_files)
@@ -636,10 +659,16 @@ class MainApplication:
             self.log_message(f"已生成: {output_file}")
 
             # 显示完成消息
-            self.root.after(0, lambda: messagebox.showinfo(
-                "完成",
-                f"文件合并完成！\n生成的文件: {output_file}"
-            ))
+            if file_type == '.pdf':
+                self.root.after(0, lambda: messagebox.showinfo(
+                    "完成",
+                    f"文件合并完成！\n使用 {merge_method} 合并成功\n生成的文件: {output_file}"
+                ))
+            else:
+                self.root.after(0, lambda: messagebox.showinfo(
+                    "完成",
+                    f"文件合并完成！\n生成的文件: {output_file}"
+                ))
 
         except Exception as e:
             # 错误处理
