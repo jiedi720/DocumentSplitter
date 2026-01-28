@@ -56,72 +56,21 @@ class PDFCombiner:
         if output_path is None:
             output_path = self.file_handler.generate_merge_output_filename(input_files)
 
-        # 创建一个空的 PDF 写入器作为基础
-        writer = PyPDF2.PdfWriter()
+        # 使用 PdfMerger 自动处理书签合并
+        merger = PyPDF2.PdfMerger()
 
-        # 页面偏移量
-        page_offset = 0
-
-        # 处理每个 PDF 文件
+        # 合并所有 PDF 文件
         for file_path in input_files:
-            with open(file_path, 'rb') as file:
-                reader = PyPDF2.PdfReader(file)
-                
-                # 添加所有页面
-                for page in reader.pages:
-                    writer.add_page(page)
-                
-                # 处理书签
-                if hasattr(reader, 'outline') and reader.outline:
-                    self._process_outline(reader.outline, writer, reader, page_offset)
-                
-                # 更新页面偏移量
-                page_offset += len(reader.pages)
+            # import_outline=True 是关键，它会自动保留并调整原有的书签页码
+            merger.append(file_path, import_outline=True)
 
-        # 写入输出文件
-        with open(output_path, 'wb') as output_file:
-            writer.write(output_file)
+        # 将内容写入输出文件
+        with open(output_path, 'wb') as fileobj:
+            merger.write(fileobj)
+        
+        # 关闭合并器，释放资源
+        merger.close()
 
         return output_path
-    
-    def _process_outline(self, outline, writer, reader, page_offset, parent=None):
-        """
-        处理 PDF 大纲（书签）
-
-        Args:
-            outline: 大纲对象
-            writer: PDF 写入器对象
-            reader: PDF 读取器对象
-            page_offset: 页面偏移量
-            parent: 父书签对象
-        """
-        last_added = None
-        
-        if isinstance(outline, list):
-            for item in outline:
-                if isinstance(item, list):
-                    # 处理子大纲
-                    if last_added:
-                        self._process_outline(item, writer, reader, page_offset, last_added)
-                else:
-                    # 处理单个大纲项
-                    try:
-                        title = item.title
-                        # 使用 get_destination_page_number 获取页码
-                        page_num = reader.get_destination_page_number(item)
-                        target_page = page_num + page_offset
-                        # 添加书签并记录引用
-                        last_added = writer.add_outline_item(title, target_page, parent=parent)
-                    except Exception as e:
-                        print(f"处理书签项时出错: {e}")
-        else:
-            # 处理单个大纲项
-            try:
-                title = outline.title
-                page_num = reader.get_destination_page_number(outline)
-                target_page = page_num + page_offset
-                last_added = writer.add_outline_item(title, target_page, parent=parent)
-            except Exception as e:
-                print(f"处理书签项时出错: {e}")
 
 
