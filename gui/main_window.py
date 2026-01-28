@@ -8,17 +8,13 @@ import tkinter as tk
 from tkinter import ttk, messagebox, filedialog
 import threading
 import os
+import sys
 from pathlib import Path
 
 # 导入GUI组件
 from .file_selector import FileSelector
 from .settings_panel import SettingsPanel
 from .analysis_result_window import AnalysisResultWindow
-
-# 导入功能模块
-import sys
-from pathlib import Path
-import os
 
 # 添加项目根目录到系统路径
 project_root = Path(__file__).resolve().parents[1]
