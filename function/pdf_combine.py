@@ -60,11 +60,9 @@ class PDFCombiner:
         merger = PyPDF2.PdfMerger()
 
         # 合并所有 PDF 文件
-        for file_index, file_path in enumerate(input_files):
-            file_name = os.path.basename(file_path)
+        for file_path in input_files:
             # import_outline=True 是关键，它会自动保留并调整原有的书签页码
-            # outline_item 参数为每个合并的文件创建一个顶层书签
-            merger.append(file_path, outline_item=file_name, import_outline=True)
+            merger.append(file_path, import_outline=True)
 
         # 将内容写入输出文件
         with open(output_path, 'wb') as fileobj:
