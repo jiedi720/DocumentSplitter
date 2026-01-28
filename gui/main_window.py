@@ -660,9 +660,15 @@ class MainApplication:
 
             # 显示完成消息
             if file_type == '.pdf':
+                # 检查是否使用了备选方法
+                if merge_method == "其他方法" and hasattr(self.pdf_combiner, 'last_used_method') and self.pdf_combiner.last_used_method:
+                    method_info = f"方法 {self.pdf_combiner.last_used_method} ({self.pdf_combiner.last_used_method_name})"
+                else:
+                    method_info = merge_method
+                
                 self.root.after(0, lambda: messagebox.showinfo(
                     "完成",
-                    f"文件合并完成！\n使用 {merge_method} 合并成功\n生成的文件: {output_file}"
+                    f"文件合并完成！\n使用 {method_info} 合并成功\n生成的文件: {output_file}"
                 ))
             else:
                 self.root.after(0, lambda: messagebox.showinfo(
