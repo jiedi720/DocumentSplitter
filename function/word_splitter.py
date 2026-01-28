@@ -309,3 +309,63 @@ class WordSplitter:
 
         # 调用 split_by_chars 方法进行分割
         return self.split_by_chars(input_path, chars_per_part, output_dir, preserve_chapter)
+
+    def merge_docs(self, input_files, output_path=None):
+        """
+        合并多个 Word 文件
+
+        该方法将多个 Word 文档合并为一个单一的 Word 文档。
+
+        Args:
+            input_files (list): 要合并的 Word 文件路径列表
+            output_path (str, optional): 输出文件路径，默认为自动生成
+
+        Returns:
+            str: 合并后文件的路径
+
+        Raises:
+            FileNotFoundError: 当输入文件不存在时抛出
+            ValueError: 当文件格式不正确或输入列表为空时抛出
+        """
+        # 验证输入文件列表
+        if not input_files:
+            raise ValueError("输入文件列表不能为空")
+
+        # 验证所有输入文件是否为 DOCX 格式
+        for file_path in input_files:
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"输入文件不存在: {file_path}")
+            if not self.file_handler.get_file_type(file_path) == '.docx':
+                raise ValueError(f"文件不是有效的 DOCX 格式: {file_path}")
+
+        # 如果未指定输出路径，则自动生成
+        if output_path is None:
+            output_path = self.file_handler.generate_merge_output_filename(input_files)
+
+        # 创建新的 Word 文档作为合并结果
+        merged_doc = Document()
+
+        # 合并所有 Word 文件
+        for file_path in input_files:
+            doc = Document(file_path)
+            
+            # 复制所有段落
+            for paragraph in doc.paragraphs:
+                if paragraph.text.strip():
+                    new_para = merged_doc.add_paragraph(paragraph.text)
+                    # 尝试复制段落样式
+                    if paragraph.style:
+                        new_para.style = paragraph.style
+            
+            # 复制所有表格
+            for table in doc.tables:
+                new_table = merged_doc.add_table(rows=len(table.rows), cols=len(table.columns))
+                # 复制表格内容
+                for i, row in enumerate(table.rows):
+                    for j, cell in enumerate(row.cells):
+                        new_table.cell(i, j).text = cell.text
+
+        # 保存合并后的文档
+        merged_doc.save(output_path)
+
+        return output_path

@@ -169,6 +169,15 @@ class MainApplication:
         )
         self.split_button.pack(side=tk.LEFT, padx=(0, 10))
 
+        # 合并文件按钮
+        self.merge_button = ttk.Button(
+            button_frame,
+            text="合并文件",
+            command=self.start_merging,
+            state=tk.DISABLED  # 初始禁用，直到选择多个文件
+        )
+        self.merge_button.pack(side=tk.LEFT, padx=(0, 10))
+
         # 文档分析按钮
         self.analyze_button = ttk.Button(
             button_frame,
@@ -246,6 +255,22 @@ class MainApplication:
             # 启用分析按钮（支持多文件分析）
             self.analyze_button.config(state=tk.NORMAL)
 
+            # 检查文件类型是否一致
+            file_types = set()
+            valid_files = []
+            for file_path in selected_files:
+                if os.path.exists(file_path):
+                    file_type = self.file_handler.get_file_type(file_path)
+                    if file_type:
+                        file_types.add(file_type)
+                        valid_files.append(file_path)
+
+            # 如果所有文件类型一致且有多个文件，启用合并按钮
+            if len(valid_files) >= 2 and len(file_types) == 1:
+                self.merge_button.config(state=tk.NORMAL)
+            else:
+                self.merge_button.config(state=tk.DISABLED)
+
             # 如果只有一个文件，启用分割按钮并调整设置
             if len(selected_files) == 1:
                 file_path = selected_files[0]
@@ -274,16 +299,23 @@ class MainApplication:
             else:
                 # 多个文件，禁用分割按钮（分割功能只支持单个文件）
                 self.split_button.config(state=tk.DISABLED)
-                self.log_message(f"已选择 {len(selected_files)} 个文件，可用于分析")
+                if valid_files:
+                    self.log_message(f"已选择 {len(valid_files)} 个文件，可用于分析")
+                    if len(file_types) == 1:
+                        self.log_message(f"文件类型一致 ({list(file_types)[0]}), 可用于合并")
+                    else:
+                        self.log_message("文件类型不一致，无法合并")
         elif selected_file and ("文件不存在" in selected_file or "不支持的文件类型" in selected_file or "拖拽的文件无效" in selected_file):
             # 文件选择错误
             self.split_button.config(state=tk.DISABLED)
             self.analyze_button.config(state=tk.DISABLED)
+            self.merge_button.config(state=tk.DISABLED)
             self.log_message(f"文件选择错误: {selected_file}")
         else:
             # 未选择文件
             self.split_button.config(state=tk.DISABLED)
             self.analyze_button.config(state=tk.DISABLED)
+            self.merge_button.config(state=tk.DISABLED)
 
     def analyze_document(self):
         """分析文档
@@ -518,8 +550,116 @@ class MainApplication:
         恢复按钮和其他UI元素的正常状态。
         """
         self.split_button.config(state=tk.NORMAL)
+        self.merge_button.config(state=tk.NORMAL)
         self.cancel_button.config(state=tk.DISABLED)
         self.file_selector.select_button.config(state=tk.NORMAL)
+
+    def start_merging(self):
+        """开始合并文件
+
+        该方法在用户点击"合并文件"按钮后被调用，
+        验证输入参数并启动合并操作线程。
+        """
+        # 获取选中的所有文件
+        selected_files = self.file_selector.get_selected_files()
+        if not selected_files or len(selected_files) < 2:
+            messagebox.showerror("错误", "请选择至少两个有效的文件")
+            return
+
+        # 检查文件类型是否一致
+        file_types = set()
+        for file_path in selected_files:
+            if not os.path.exists(file_path):
+                messagebox.showerror("错误", f"文件不存在: {file_path}")
+                return
+            file_type = self.file_handler.get_file_type(file_path)
+            if not file_type:
+                messagebox.showerror("错误", f"不支持的文件类型: {file_path}")
+                return
+            file_types.add(file_type)
+
+        if len(file_types) > 1:
+            messagebox.showerror("错误", "请选择相同类型的文件进行合并")
+            return
+
+        # 禁用相关UI元素，防止重复操作
+        self.merge_button.config(state=tk.DISABLED)
+        self.cancel_button.config(state=tk.NORMAL)
+        self.file_selector.select_button.config(state=tk.DISABLED)
+
+        # 重置取消标志
+        self.operation_cancelled = False
+
+        # 在新线程中执行合并操作，避免界面冻结
+        self.merge_thread = threading.Thread(
+            target=self.perform_merging,
+            args=(selected_files,)
+        )
+        self.merge_thread.start()
+
+    def perform_merging(self, input_files):
+        """执行合并操作
+
+        该方法在后台线程中执行实际的文件合并操作，
+        根据文件类型调用相应的合并方法。
+
+        Args:
+            input_files (list): 要合并的文件路径列表
+        """
+        try:
+            # 更新进度信息
+            self.update_progress("正在准备合并文件...", 0)
+
+            # 获取文件类型
+            file_type = self.file_handler.get_file_type(input_files[0])
+            if not file_type:
+                raise ValueError("不支持的文件格式")
+
+            # 获取输出路径
+            settings = self.settings_panel.get_settings()
+            output_dir = settings.get('output_path') if settings else None
+
+            # 根据文件类型执行相应的合并方法
+            output_file = ""
+
+            if file_type == '.pdf':
+                self.log_message(f"开始合并 {len(input_files)} 个 PDF 文件")
+                output_file = self.pdf_splitter.merge_pdfs(input_files)
+            elif file_type == '.docx':
+                self.log_message(f"开始合并 {len(input_files)} 个 Word 文件")
+                output_file = self.word_splitter.merge_docs(input_files)
+            elif file_type == '.txt':
+                self.log_message(f"开始合并 {len(input_files)} 个 TXT 文件")
+                output_file = self.txt_splitter.merge_txts(input_files)
+            elif file_type == '.md':
+                self.log_message(f"开始合并 {len(input_files)} 个 Markdown 文件")
+                output_file = self.md_splitter.merge_mds(input_files)
+
+            # 检查操作是否被用户取消
+            if self.operation_cancelled:
+                self.log_message("操作已取消")
+                return
+
+            # 更新进度为完成状态
+            self.update_progress(f"合并完成！生成了 {output_file}", 100)
+
+            # 记录生成的文件
+            self.log_message(f"已生成: {output_file}")
+
+            # 显示完成消息
+            self.root.after(0, lambda: messagebox.showinfo(
+                "完成",
+                f"文件合并完成！\n生成的文件: {output_file}"
+            ))
+
+        except Exception as e:
+            # 错误处理
+            error_msg = f"合并过程中发生错误: {str(e)}"
+            self.log_message(error_msg)
+            self.root.after(0, lambda: messagebox.showerror("错误", error_msg))
+        finally:
+            # 操作完成后恢复UI元素状态
+            self.root.after(0, self.reset_ui_after_operation)
 
     def update_progress(self, message, value):
         """更新进度信息

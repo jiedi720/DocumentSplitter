@@ -262,3 +262,49 @@ class MdSplitter:
 
         # 调用 split_by_chars 方法进行分割
         return self.split_by_chars(input_path, chars_per_part, output_dir, preserve_chapter)
+
+    def merge_mds(self, input_files, output_path=None):
+        """
+        合并多个 Markdown 文件
+
+        该方法将多个 Markdown 文件合并为一个单一的 Markdown 文件。
+
+        Args:
+            input_files (list): 要合并的 Markdown 文件路径列表
+            output_path (str, optional): 输出文件路径，默认为自动生成
+
+        Returns:
+            str: 合并后文件的路径
+
+        Raises:
+            FileNotFoundError: 当输入文件不存在时抛出
+            ValueError: 当文件格式不正确或输入列表为空时抛出
+        """
+        # 验证输入文件列表
+        if not input_files:
+            raise ValueError("输入文件列表不能为空")
+
+        # 验证所有输入文件是否为 Markdown 格式
+        for file_path in input_files:
+            if not os.path.exists(file_path):
+                raise FileNotFoundError(f"输入文件不存在: {file_path}")
+            if not self.file_handler.get_file_type(file_path) == '.md':
+                raise ValueError(f"文件不是有效的 Markdown 格式: {file_path}")
+
+        # 如果未指定输出路径，则自动生成
+        if output_path is None:
+            output_path = self.file_handler.generate_merge_output_filename(input_files)
+
+        # 合并所有 Markdown 文件
+        merged_content = []
+        for file_path in input_files:
+            with open(file_path, 'r', encoding='utf-8') as file:
+                content = file.read()
+                if content:
+                    merged_content.append(content)
+
+        # 将合并后的内容写入输出文件
+        with open(output_path, 'w', encoding='utf-8') as file:
+            file.write('\n\n---\n\n'.join(merged_content))  # 在文件之间添加分隔线
+
+        return output_path

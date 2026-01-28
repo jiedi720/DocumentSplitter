@@ -44,7 +44,8 @@ class SettingsPanel(ttk.LabelFrame):
         # 保留章节完整性变量
         self.preserve_chapter_var = tk.BooleanVar(value=False)
         
-
+        # 排除文件格式变量
+        self.exclude_formats_var = tk.StringVar(value="")
 
         # 高级选项展开状态
         self.advanced_expanded = tk.BooleanVar(value=False)

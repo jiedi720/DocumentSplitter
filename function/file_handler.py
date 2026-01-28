@@ -116,3 +116,45 @@ class FileHandler:
         # 转换为 MB 并保留两位小数
         size_mb = size_bytes / (1024 * 1024)
         return round(size_mb, 2)
+
+    @staticmethod
+    def generate_merge_output_filename(files, output_dir=None):
+        """
+        生成合并输出文件名
+
+        该方法根据输入文件列表生成合并后的输出文件名，
+        格式为：merged_{时间戳}.{扩展名}
+
+        Args:
+            files (list): 输入文件列表
+            output_dir (str, optional): 输出目录，默认使用第一个文件的目录
+
+        Returns:
+            str: 合并后文件的完整路径
+        """
+        import datetime
+        
+        # 获取时间戳
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        
+        # 使用第一个文件的扩展名
+        if files:
+            first_file = files[0]
+            ext = Path(first_file).suffix
+        else:
+            ext = '.txt'
+        
+        # 确定输出目录
+        if output_dir:
+            output_path = Path(output_dir)
+        elif files:
+            output_path = Path(files[0]).parent
+        else:
+            output_path = Path('.')
+        
+        # 确保输出目录存在
+        output_path.mkdir(parents=True, exist_ok=True)
+        
+        # 生成文件名
+        merged_filename = f"merged_{timestamp}{ext}"
+        return str(output_path / merged_filename)
