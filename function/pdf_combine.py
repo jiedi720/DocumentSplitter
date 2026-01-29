@@ -5,9 +5,20 @@ PDF 合并逻辑
 包括保留原始书签结构。
 """
 import os
-import PyPDF2
+import sys
 from pathlib import Path
 from .file_handler import FileHandler
+
+# 尝试导入 pypdf（PyPDF2 的继任者）
+try:
+    import pypdf
+    print("DEBUG: 使用 pypdf 库")
+    # 使用 pypdf 替代 PyPDF2
+    PyPDF2 = pypdf
+except ImportError:
+    # 如果 pypdf 不可用，使用 PyPDF2
+    import PyPDF2
+    print("DEBUG: 使用 PyPDF2 库")
 
 
 class PDFCombiner:
@@ -62,47 +73,114 @@ class PDFCombiner:
 
         print("DEBUG: 尝试方法 1: 使用 PyPDF2 合并（保留书签模式）")
         try:
-            merger = PyPDF2.PdfMerger()
-            expected_bookmarks = 0
+            # 检测是否使用的是 pypdf 库
+            using_pypdf = False
+            try:
+                # 尝试 pypdf 的 API
+                from pypdf import PdfWriter, PdfReader
+                using_pypdf = True
+                print("DEBUG: 使用 pypdf API")
+                
+                writer = PdfWriter()
+                expected_bookmarks = 0
+                
+                # 分析每个文件的书签结构
+                bookmark_analysis_results = []
+                
+                for i, file_path in enumerate(input_files):
+                    print(f"DEBUG: 正在处理第 {i+1} 个文件: {file_path}")
+                    
+                    # 分析文件的书签结构
+                    analysis_result = self._analyze_file_bookmarks(file_path)
+                    bookmark_analysis_results.append(analysis_result)
+                    
+                    # 打印分析结果
+                    print(f"DEBUG: 文件 {file_path} 分析结果:")
+                    print(f"DEBUG:   包含书签: {analysis_result['has_bookmarks']}")
+                    print(f"DEBUG:   书签数量: {analysis_result['bookmark_count']}")
+                    
+                    if analysis_result.get('warning'):
+                        print(f"DEBUG:   警告: {analysis_result['warning']}")
+                    
+                    if analysis_result.get('error'):
+                        print(f"DEBUG:   错误: {analysis_result['error']}")
+                    
+                    if analysis_result.get('specific_issues'):
+                        print(f"DEBUG:   具体问题: {', '.join(analysis_result['specific_issues'])}")
+                    
+                    # 统计原始书签
+                    expected_bookmarks += analysis_result['bookmark_count']
+                    
+                    # 使用 pypdf 逐个页面复制并尝试保留书签
+                    reader = PdfReader(file_path)
+                    
+                    # 记录当前页面总数，用于书签页码调整
+                    current_page_count = len(writer.pages)
+                    
+                    # 复制所有页面
+                    for page_num in range(len(reader.pages)):
+                        page = reader.pages[page_num]
+                        writer.add_page(page)
+                    
+                    # 尝试复制书签
+                    if hasattr(reader, 'outline') and reader.outline:
+                        print(f"DEBUG: 尝试复制书签，当前页面偏移: {current_page_count}")
+                        try:
+                            # 递归复制书签结构
+                            self._copy_bookmarks_pypdf(reader.outline, writer, current_page_count)
+                            print(f"DEBUG: 成功复制书签")
+                        except Exception as e:
+                            print(f"DEBUG: 复制书签时出错: {str(e)}")
+                    
+                    print(f"DEBUG: 成功添加文件: {file_path}")
+                
+                # 写入输出文件
+                with open(output_path, 'wb') as fileobj:
+                    writer.write(fileobj)
+                    
+            except ImportError:
+                # 使用 PyPDF2 的 API
+                using_pypdf = False
+                print("DEBUG: 使用 PyPDF2 API")
+                
+                merger = PyPDF2.PdfMerger()
+                expected_bookmarks = 0
 
-            # 分析每个文件的书签结构
-            problematic_files = []
-            bookmark_analysis_results = []
-            
-            for i, file_path in enumerate(input_files):
-                print(f"DEBUG: 正在处理第 {i+1} 个文件: {file_path}")
+                # 分析每个文件的书签结构
+                bookmark_analysis_results = []
                 
-                # 分析文件的书签结构
-                analysis_result = self._analyze_file_bookmarks(file_path)
-                bookmark_analysis_results.append(analysis_result)
+                for i, file_path in enumerate(input_files):
+                    print(f"DEBUG: 正在处理第 {i+1} 个文件: {file_path}")
+                    
+                    # 分析文件的书签结构
+                    analysis_result = self._analyze_file_bookmarks(file_path)
+                    bookmark_analysis_results.append(analysis_result)
+                    
+                    # 打印分析结果
+                    print(f"DEBUG: 文件 {file_path} 分析结果:")
+                    print(f"DEBUG:   包含书签: {analysis_result['has_bookmarks']}")
+                    print(f"DEBUG:   书签数量: {analysis_result['bookmark_count']}")
+                    
+                    if analysis_result.get('warning'):
+                        print(f"DEBUG:   警告: {analysis_result['warning']}")
+                    
+                    if analysis_result.get('error'):
+                        print(f"DEBUG:   错误: {analysis_result['error']}")
+                    
+                    if analysis_result.get('specific_issues'):
+                        print(f"DEBUG:   具体问题: {', '.join(analysis_result['specific_issues'])}")
+                    
+                    # 统计原始书签
+                    expected_bookmarks += analysis_result['bookmark_count']
+                    
+                    # 尝试导入
+                    merger.append(file_path, import_outline=True)
+                    print(f"DEBUG: 成功添加文件: {file_path}")
                 
-                # 打印分析结果
-                print(f"DEBUG: 文件 {file_path} 分析结果:")
-                print(f"DEBUG:   包含书签: {analysis_result['has_bookmarks']}")
-                print(f"DEBUG:   书签数量: {analysis_result['bookmark_count']}")
-                
-                if analysis_result.get('warning'):
-                    print(f"DEBUG:   警告: {analysis_result['warning']}")
-                
-                if analysis_result.get('error'):
-                    print(f"DEBUG:   错误: {analysis_result['error']}")
-                
-                if analysis_result.get('specific_issues'):
-                    print(f"DEBUG:   具体问题: {', '.join(analysis_result['specific_issues'])}")
-                
-                # 统计原始书签
-                expected_bookmarks += analysis_result['bookmark_count']
-                
-                # 尝试导入
-                merger.append(file_path, import_outline=True)
-                print(f"DEBUG: 成功添加文件: {file_path}")
-            
-            # 如果发现可能有问题的文件，打印警告
-            # 注意：这里不再直接构建 problematic_files，而是在诊断阶段通过 analysis_results 构建
-
-            with open(output_path, 'wb') as fileobj:
-                merger.write(fileobj)
-            merger.close()
+                # 写入输出文件
+                with open(output_path, 'wb') as fileobj:
+                    merger.write(fileobj)
+                merger.close()
 
             # --- 关键：实质性校验环节 ---
             actual_bookmarks = 0
@@ -314,6 +392,52 @@ class PDFCombiner:
             result["specific_issues"].append(f"分析错误: {str(e)}")
         
         return result
+
+    def _copy_bookmarks_pypdf(self, outline, writer, page_offset):
+        """
+        使用 pypdf 递归复制书签结构
+
+        Args:
+            outline: 原始书签大纲
+            writer: 目标 PDF 写入器
+            page_offset: 页码偏移量
+        """
+        from pypdf.generic import Destination, NameObject, TextStringObject, NumberObject
+        
+        for item in outline:
+            if isinstance(item, list):
+                # 嵌套书签，递归处理
+                self._copy_bookmarks_pypdf(item, writer, page_offset)
+            else:
+                try:
+                    # 尝试获取书签标题和目标
+                    if hasattr(item, 'title'):
+                        title = item.title
+                        
+                        # 处理不同类型的书签目标
+                        page_num = 0
+                        if hasattr(item, 'page'):
+                            if hasattr(item.page, 'page_number'):
+                                # 目标是具有page_number属性的对象
+                                page_num = item.page.page_number + page_offset
+                            elif isinstance(item.page, NumberObject):
+                                # 目标是直接的数字对象
+                                page_num = int(item.page) + page_offset
+                            else:
+                                # 尝试直接转换为整数
+                                try:
+                                    page_num = int(item.page) + page_offset
+                                except:
+                                    print(f"DEBUG: 无法解析书签目标: {type(item.page)}")
+                                    continue
+                        
+                        # 确保页码有效
+                        if page_num < len(writer.pages):
+                            # 添加书签
+                            writer.add_outline_item(title, page_num)
+                            print(f"DEBUG: 添加书签: {title} -> 页码 {page_num}")
+                except Exception as e:
+                    print(f"DEBUG: 处理书签时出错: {str(e)}")
 
     def _check_bookmark_titles(self, structure, problematic_bookmarks):
         """
