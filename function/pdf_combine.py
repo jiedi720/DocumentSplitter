@@ -110,44 +110,55 @@ class PDFCombiner:
                 check_reader = PyPDF2.PdfReader(f)
                 actual_bookmarks = self._count_bookmarks(check_reader.outline)
 
-            if expected_bookmarks > 0 and actual_bookmarks == 0:
-                # 删除无效文件
-                if os.path.exists(output_path):
-                    os.remove(output_path)
-                    print(f"DEBUG: 删除无效文件: {output_path}")
-                
-                # 诊断书签丢失的具体原因
-                diagnosis = self._diagnose_bookmark_loss(input_files, bookmark_analysis_results)
-                
-                # 构建详细的错误信息
-                error_message = (
-                    f"书签丢失校验失败：预期包含 {expected_bookmarks} 个书签，" 
-                    f"但生成的 PDF 实际包含 0 个。\n\n"
-                )
-                
-                # 添加具体的诊断结果
-                error_message += "=== 具体诊断结果 ===\n"
-                error_message += f"诊断结果: {diagnosis['conclusion']}\n\n"
-                
-                # 添加可能的问题文件信息
-                if diagnosis['problematic_files']:
-                    error_message += "可能导致问题的文件：\n"
-                    for file_path, issues in diagnosis['problematic_files'][:3]:  # 只显示前3个问题文件
-                        file_name = os.path.basename(file_path)
-                        error_message += f"- {file_name}: {', '.join(issues)}\n"
-                    if len(diagnosis['problematic_files']) > 3:
-                        error_message += f"... 等 {len(diagnosis['problematic_files']) - 3} 个文件\n\n"
-                
-                # 添加具体的解决方案
-                error_message += "=== 具体解决方案 ===\n"
-                error_message += "\n".join(diagnosis['solutions'])
-                
-                # 触发自定义异常：书签丢失
-                raise RuntimeError(error_message)
+            # 修改书签校验逻辑，使其更加灵活
+            if expected_bookmarks > 0:
+                if actual_bookmarks == 0:
+                    # 删除无效文件
+                    if os.path.exists(output_path):
+                        os.remove(output_path)
+                        print(f"DEBUG: 删除无效文件: {output_path}")
+                    
+                    # 诊断书签丢失的具体原因
+                    diagnosis = self._diagnose_bookmark_loss(input_files, bookmark_analysis_results)
+                    
+                    # 构建详细的错误信息
+                    error_message = (
+                        f"书签丢失校验失败：预期包含 {expected_bookmarks} 个书签，" 
+                        f"但生成的 PDF 实际包含 0 个。\n\n"
+                    )
+                    
+                    # 添加具体的诊断结果
+                    error_message += "=== 具体诊断结果 ===\n"
+                    error_message += f"诊断结果: {diagnosis['conclusion']}\n\n"
+                    
+                    # 添加可能的问题文件信息
+                    if diagnosis['problematic_files']:
+                        error_message += "可能导致问题的文件：\n"
+                        for file_path, issues in diagnosis['problematic_files'][:3]:  # 只显示前3个问题文件
+                            file_name = os.path.basename(file_path)
+                            error_message += f"- {file_name}: {', '.join(issues)}\n"
+                        if len(diagnosis['problematic_files']) > 3:
+                            error_message += f"... 等 {len(diagnosis['problematic_files']) - 3} 个文件\n\n"
+                    
+                    # 添加具体的解决方案
+                    error_message += "=== 具体解决方案 ===\n"
+                    error_message += "\n".join(diagnosis['solutions'])
+                    
+                    # 触发自定义异常：书签丢失
+                    raise RuntimeError(error_message)
+                else:
+                    # 书签校验通过，允许部分差异
+                    # 计算差异百分比
+                    difference_percentage = abs(expected_bookmarks - actual_bookmarks) / expected_bookmarks * 100
+                    print(f"DEBUG: 合并成功，书签校验通过 ({actual_bookmarks}/{expected_bookmarks})")
+                    print(f"DEBUG: 书签差异: {difference_percentage:.1f}%")
+                    
+                    # 如果差异较大，打印警告
+                    if difference_percentage > 20:
+                        print(f"DEBUG: 警告: 书签数量差异较大 ({difference_percentage:.1f}%)，可能存在部分书签丢失")
             
             self.last_used_method = "1"
             self.last_used_method_name = "PyPDF2（保留书签）"
-            print(f"DEBUG: 合并成功，书签校验通过 ({actual_bookmarks}/{expected_bookmarks})")
             print(f"DEBUG: 使用方法 1: PyPDF2（保留书签）合并成功")
             return output_path
 
@@ -312,11 +323,15 @@ class PDFCombiner:
             structure: 书签结构
             problematic_bookmarks: 收集有问题的书签
         """
+        # 放宽特殊字符检查，只检查真正可能导致问题的控制字符
+        # 允许所有可打印字符和常见的非ASCII字符
         for item in structure:
             if item["type"] == "bookmark":
                 title = item.get("title", "")
-                if title and any(ord(c) < 32 or ord(c) > 126 for c in title):
-                    problematic_bookmarks.append(title)
+                if title:
+                    # 只检查ASCII控制字符（0-31），不检查非ASCII字符
+                    if any(ord(c) < 32 for c in title):
+                        problematic_bookmarks.append(title)
             elif item["type"] == "nested":
                 self._check_bookmark_titles(item["children"], problematic_bookmarks)
 
