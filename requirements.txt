@@ -1,4 +1,12 @@
+# PDF 处理库
 PyPDF2==3.0.1
+pypdf>=3.0.0  # PyPDF2 的继任者，推荐使用
+
+# Word 处理库
 python-docx==0.8.11
+
+# GUI 拖放支持
 tkinterdnd2==0.4.3
-pycryptodome==3.20.0
+
+# 构建工具
+tqdm>=4.65.0  # 用于构建过程中的进度显示
