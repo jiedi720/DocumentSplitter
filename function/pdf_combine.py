@@ -126,8 +126,8 @@ class PDFCombiner:
                     if hasattr(reader, 'outline') and reader.outline:
                         print(f"DEBUG: 尝试复制书签，当前页面偏移: {current_page_count}")
                         try:
-                            # 递归复制书签结构
-                            self._copy_bookmarks_pypdf(reader.outline, writer, current_page_count)
+                            # 递归复制书签结构，保留层级关系
+                            self._copy_bookmarks_pypdf(reader.outline, writer, current_page_count, parent=None)
                             print(f"DEBUG: 成功复制书签")
                         except Exception as e:
                             print(f"DEBUG: 复制书签时出错: {str(e)}")
@@ -393,51 +393,117 @@ class PDFCombiner:
         
         return result
 
-    def _copy_bookmarks_pypdf(self, outline, writer, page_offset):
+    def _copy_bookmarks_pypdf(self, outline, writer, page_offset, parent=None):
         """
-        使用 pypdf 递归复制书签结构
+        使用 pypdf 递归复制书签结构，保留层级关系
 
         Args:
             outline: 原始书签大纲
             writer: 目标 PDF 写入器
             page_offset: 页码偏移量
+            parent: 父书签对象，用于构建层级结构
         """
         from pypdf.generic import Destination, NameObject, TextStringObject, NumberObject
+        from pypdf.generic._data_structures import Destination as PypdfDestination
         
-        for item in outline:
-            if isinstance(item, list):
-                # 嵌套书签，递归处理
-                self._copy_bookmarks_pypdf(item, writer, page_offset)
-            else:
-                try:
-                    # 尝试获取书签标题和目标
-                    if hasattr(item, 'title'):
-                        title = item.title
-                        
-                        # 处理不同类型的书签目标
-                        page_num = 0
-                        if hasattr(item, 'page'):
-                            if hasattr(item.page, 'page_number'):
-                                # 目标是具有page_number属性的对象
-                                page_num = item.page.page_number + page_offset
-                            elif isinstance(item.page, NumberObject):
-                                # 目标是直接的数字对象
-                                page_num = int(item.page) + page_offset
-                            else:
-                                # 尝试直接转换为整数
-                                try:
-                                    page_num = int(item.page) + page_offset
-                                except:
-                                    print(f"DEBUG: 无法解析书签目标: {type(item.page)}")
-                                    continue
-                        
-                        # 确保页码有效
-                        if page_num < len(writer.pages):
-                            # 添加书签
-                            writer.add_outline_item(title, page_num)
-                            print(f"DEBUG: 添加书签: {title} -> 页码 {page_num}")
-                except Exception as e:
-                    print(f"DEBUG: 处理书签时出错: {str(e)}")
+        # 处理不同类型的大纲对象
+        if isinstance(outline, list):
+            # 大纲是一个列表，递归处理每个元素
+            # 注意：在 pypdf 中，列表可能包含混合的 Destination 对象和子列表
+            # 子列表中的元素通常是前一个 Destination 对象的子书签
+            last_destination = None
+            for item in outline:
+                if isinstance(item, PypdfDestination):
+                    # 处理 Destination 对象
+                    # 记录最后一个 Destination 对象
+                    last_destination = self._add_destination(item, writer, page_offset, parent)
+                elif isinstance(item, list):
+                    # 处理子列表，将其作为最后一个 Destination 对象的子书签
+                    if last_destination:
+                        self._copy_bookmarks_pypdf(item, writer, page_offset, last_destination)
+                    else:
+                        # 如果没有最后一个 Destination 对象，将其作为顶级书签
+                        self._copy_bookmarks_pypdf(item, writer, page_offset, parent)
+                else:
+                    # 其他类型的对象，跳过
+                    print(f"DEBUG: 跳过未知类型的大纲对象: {type(item)}")
+        elif isinstance(outline, PypdfDestination):
+            # 大纲是一个 Destination 对象
+            self._add_destination(outline, writer, page_offset, parent)
+        else:
+            # 其他类型的对象，跳过
+            print(f"DEBUG: 跳过未知类型的大纲对象: {type(outline)}")
+    
+    def _add_destination(self, destination, writer, page_offset, parent=None):
+        """
+        添加单个 Destination 对象到 PDF 写入器
+
+        Args:
+            destination: Destination 对象
+            writer: 目标 PDF 写入器
+            page_offset: 页码偏移量
+            parent: 父书签对象，用于构建层级结构
+
+        Returns:
+            新添加的书签对象
+        """
+        from pypdf.generic import NumberObject
+        
+        try:
+            # 尝试获取标题
+            if hasattr(destination, 'title'):
+                title = destination.title
+                
+                # 处理不同类型的书签目标
+                page_num = 0
+                if hasattr(destination, 'page'):
+                    if hasattr(destination.page, 'page_number'):
+                        # 目标是具有page_number属性的对象
+                        page_num = destination.page.page_number + page_offset
+                    elif isinstance(destination.page, NumberObject):
+                        # 目标是直接的数字对象
+                        page_num = int(destination.page) + page_offset
+                    else:
+                        # 尝试直接转换为整数
+                        try:
+                            page_num = int(destination.page) + page_offset
+                        except:
+                            print(f"DEBUG: 无法解析书签目标: {type(destination.page)}")
+                            return None
+                
+                # 确保页码有效
+                if page_num < len(writer.pages):
+                    # 添加书签，保留层级结构
+                    if parent:
+                        # 添加为子书签
+                        child = writer.add_outline_item(title, page_num, parent=parent)
+                        print(f"DEBUG: 添加子书签: {title} -> 页码 {page_num}")
+                    else:
+                        # 添加为顶级书签
+                        child = writer.add_outline_item(title, page_num)
+                        print(f"DEBUG: 添加顶级书签: {title} -> 页码 {page_num}")
+                    
+                    # 处理嵌套书签
+                    # 尝试获取子项目
+                    try:
+                        # 方式 1: 检查是否有 children 属性
+                        if hasattr(destination, 'children'):
+                            children = destination.children
+                            # 检查 children 是否是可调用对象（方法）
+                            if callable(children):
+                                # 如果是方法，尝试调用它
+                                children = children()
+                            # 如果 children 是可迭代对象，递归处理
+                            if children:
+                                self._copy_bookmarks_pypdf(children, writer, page_offset, child)
+                    except Exception as e:
+                        print(f"DEBUG: 处理书签子项时出错: {str(e)}")
+                    
+                    return child
+        except Exception as e:
+            print(f"DEBUG: 处理书签时出错: {str(e)}")
+        
+        return None
 
     def _check_bookmark_titles(self, structure, problematic_bookmarks):
         """
