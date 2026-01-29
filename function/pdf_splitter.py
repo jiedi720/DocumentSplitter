@@ -6,15 +6,14 @@ import os
 import PyPDF2
 from pathlib import Path
 from .file_handler import FileHandler
-from .chapter_detector import ChapterDetector
+
 
 
 class PDFSplitter:
     def __init__(self):
         self.file_handler = FileHandler()
-        self.chapter_detector = ChapterDetector()
 
-    def split_by_pages(self, input_path, pages_per_split, output_dir=None, preserve_chapter=False, split_mode='fixed'):
+    def split_by_pages(self, input_path, pages_per_split, output_dir=None, split_mode='fixed'):
         if output_dir is None:
             output_dir = str(Path(input_path).parent)
         
@@ -25,20 +24,10 @@ class PDFSplitter:
             if split_mode == 'equal':
                 pages_per_split = 1 if pages_per_split >= total_pages else (total_pages + pages_per_split - 1) // pages_per_split
             
-            chapter_page_nums = []
-            if preserve_chapter:
-                chapter_pages = self.chapter_detector.find_page_chapter_positions(reader.pages)
-                chapter_page_nums = [ch['page_num'] for ch in chapter_pages]
-
             output_paths, part_num, current_page = [], 1, 0
             while current_page < total_pages:
                 target_end = min(current_page + pages_per_split, total_pages)
                 end_page = target_end
-                if preserve_chapter and chapter_page_nums:
-                    for ch_p in chapter_page_nums:
-                        if current_page < ch_p < target_end:
-                            end_page = ch_p
-                            break
 
                 out_p = self.file_handler.generate_output_filename(input_path, part_num, '.pdf')
                 self._write_pdf(reader, current_page, end_page, out_p)
@@ -47,10 +36,10 @@ class PDFSplitter:
                 current_page = end_page
         return output_paths
 
-    def split_by_equal_parts(self, input_path, parts_count, output_dir=None, preserve_chapter=False):
-        return self.split_by_pages(input_path, parts_count, output_dir, preserve_chapter, split_mode='equal')
+    def split_by_equal_parts(self, input_path, parts_count, output_dir=None):
+        return self.split_by_pages(input_path, parts_count, output_dir, split_mode='equal')
 
-    def split_by_chars(self, input_path, chars_per_split, output_dir=None, preserve_chapter=False):
+    def split_by_chars(self, input_path, chars_per_split, output_dir=None):
         with open(input_path, 'rb') as file:
             reader = PyPDF2.PdfReader(file)
             cumulative_chars = []

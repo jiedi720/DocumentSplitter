@@ -8,7 +8,7 @@ import os
 from docx import Document
 from pathlib import Path
 from .file_handler import FileHandler
-from .chapter_detector import ChapterDetector
+
 
 
 class WordSplitter:
@@ -24,9 +24,8 @@ class WordSplitter:
         创建文件处理器实例，用于处理通用文件操作。
         """
         self.file_handler = FileHandler()
-        self.chapter_detector = ChapterDetector()
 
-    def split_by_chars(self, input_path, chars_per_split, output_dir=None, preserve_chapter=False):
+    def split_by_chars(self, input_path, chars_per_split, output_dir=None):
         """
         按字符数分割 Word 文件
 
@@ -93,27 +92,9 @@ class WordSplitter:
         # 按字符数分割文本内容
         text_parts = []  # 存储分割后的文本片段
 
-        if preserve_chapter:
-            # 保留章节完整性：调整分割点
-            current_pos = 0
-            while current_pos < len(text_content):
-                target_pos = min(current_pos + chars_per_split, len(text_content))
-
-                # 调整分割点以避免在章节中间分割
-                adjusted_pos = self.chapter_detector.adjust_split_point(
-                    target_pos, text_content, 'cn', max_adjustment=chars_per_split // 2
-                )
-
-                # 确保至少分割一部分内容
-                if adjusted_pos <= current_pos:
-                    adjusted_pos = target_pos
-
-                text_parts.append(text_content[current_pos:adjusted_pos])
-                current_pos = adjusted_pos
-        else:
-            # 不保留章节完整性：直接按字符数分割
-            for i in range(0, len(text_content), chars_per_split):
-                text_parts.append(text_content[i:i + chars_per_split])
+        # 直接按字符数分割
+        for i in range(0, len(text_content), chars_per_split):
+            text_parts.append(text_content[i:i + chars_per_split])
 
         # 将每个文本部分写入新的 Word 文件
         output_paths = []  # 存储输出文件路径的列表
@@ -138,7 +119,7 @@ class WordSplitter:
 
         return output_paths
 
-    def split_by_paragraphs(self, input_path, paras_per_split, output_dir=None, preserve_chapter=False):
+    def split_by_paragraphs(self, input_path, paras_per_split, output_dir=None):
         """
         按段落数分割 Word 文件
 
@@ -189,12 +170,6 @@ class WordSplitter:
             new_doc.save(output_path)
             return [output_path]
 
-        # 如果需要保留章节完整性，先查找所有章节段落位置
-        chapter_paras = []
-        if preserve_chapter:
-            chapter_paras = self.chapter_detector.find_paragraph_chapter_positions(all_paragraphs)
-            chapter_para_indices = [ch['para_index'] for ch in chapter_paras]
-
         # 按段落数分割文档
         output_paths = []  # 存储输出文件路径的列表
         part_num = 1       # 分割部分的编号
@@ -203,24 +178,7 @@ class WordSplitter:
         while current_para < len(all_paragraphs):
             # 计算理论上的结束段落索引
             target_end_para = min(current_para + paras_per_split, len(all_paragraphs))
-
-            # 如果需要保留章节完整性，调整结束段落索引
-            if preserve_chapter and chapter_para_indices:
-                # 查找目标结束段落之后的第一个章节段落
-                next_chapter_para = None
-                for chapter_para in chapter_para_indices:
-                    if chapter_para > current_para and chapter_para < target_end_para:
-                        next_chapter_para = chapter_para
-                        break
-
-                # 如果在目标范围内找到了章节段落，则在章节段落处分割
-                if next_chapter_para is not None:
-                    end_para = next_chapter_para
-                else:
-                    # 没有找到章节段落，使用原始的结束段落索引
-                    end_para = target_end_para
-            else:
-                end_para = target_end_para
+            end_para = target_end_para
 
             # 生成输出文件名
             output_path = self.file_handler.generate_output_filename(
@@ -246,7 +204,7 @@ class WordSplitter:
 
         return output_paths
 
-    def split_by_equal_parts(self, input_path, parts_count, output_dir=None, preserve_chapter=False):
+    def split_by_equal_parts(self, input_path, parts_count, output_dir=None):
         """
         均分 Word 文件
 
@@ -308,7 +266,7 @@ class WordSplitter:
             chars_per_part = (total_chars + parts_count - 1) // parts_count
 
         # 调用 split_by_chars 方法进行分割
-        return self.split_by_chars(input_path, chars_per_part, output_dir, preserve_chapter)
+        return self.split_by_chars(input_path, chars_per_part, output_dir)
 
     def merge_docs(self, input_files, output_path=None):
         """

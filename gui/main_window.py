@@ -424,24 +424,21 @@ class MainApplication:
                     output_files = self.pdf_splitter.split_by_pages(
                         file_path,
                         settings['value'],
-                        settings['output_path'],
-                        False
+                        settings['output_path']
                     )
                 elif settings['mode'] == 'chars':
                     self.log_message(f"开始按字符数分割 PDF 文件，每份 {settings['value']} 字符")
                     output_files = self.pdf_splitter.split_by_chars(
                         file_path,
                         settings['value'],
-                        settings['output_path'],
-                        False
+                        settings['output_path']
                     )
                 elif settings['mode'] == 'equal':
                     self.log_message(f"开始均分 PDF 文件，共分割为 {settings['value']} 份")
                     output_files = self.pdf_splitter.split_by_equal_parts(
                         file_path,
                         settings['value'],
-                        settings['output_path'],
-                        False
+                        settings['output_path']
                     )
             elif file_type == '.docx':
                 if settings['mode'] == 'equal':
@@ -449,16 +446,14 @@ class MainApplication:
                     output_files = self.word_splitter.split_by_equal_parts(
                         file_path,
                         settings['value'],
-                        settings['output_path'],
-                        False
+                        settings['output_path']
                     )
                 else:  # 默认按字符数分割
                     self.log_message(f"开始按字符数分割 Word 文件，每份 {settings['value']} 字符")
                     output_files = self.word_splitter.split_by_chars(
                         file_path,
                         settings['value'],
-                        settings['output_path'],
-                        False
+                        settings['output_path']
                     )
             elif file_type == '.txt':
                 if settings['mode'] == 'equal':
@@ -466,16 +461,14 @@ class MainApplication:
                     output_files = self.txt_splitter.split_by_equal_parts(
                         file_path,
                         settings['value'],
-                        settings['output_path'],
-                        False
+                        settings['output_path']
                     )
                 else:  # 默认按字符数分割
                     self.log_message(f"开始按字符数分割 TXT 文件，每份 {settings['value']} 字符")
                     output_files = self.txt_splitter.split_by_chars(
                         file_path,
                         settings['value'],
-                        settings['output_path'],
-                        False
+                        settings['output_path']
                     )
             elif file_type == '.md':
                 if settings['mode'] == 'equal':
@@ -483,16 +476,14 @@ class MainApplication:
                     output_files = self.md_splitter.split_by_equal_parts(
                         file_path,
                         settings['value'],
-                        settings['output_path'],
-                        False
+                        settings['output_path']
                     )
                 else:  # 默认按字符数分割
                     self.log_message(f"开始按字符数分割 Markdown 文件，每份 {settings['value']} 字符")
                     output_files = self.md_splitter.split_by_chars(
                         file_path,
                         settings['value'],
-                        settings['output_path'],
-                        False
+                        settings['output_path']
                     )
 
             # 检查操作是否被用户取消
