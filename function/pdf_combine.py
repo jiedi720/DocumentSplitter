@@ -412,11 +412,11 @@ class PDFCombiner:
             # 注意：在 pypdf 中，列表可能包含混合的 Destination 对象和子列表
             # 子列表中的元素通常是前一个 Destination 对象的子书签
             last_destination = None
-            for item in outline:
+            for i, item in enumerate(outline):
                 if isinstance(item, PypdfDestination):
                     # 处理 Destination 对象
                     # 记录最后一个 Destination 对象
-                    last_destination = self._add_destination(item, writer, page_offset, parent)
+                    last_destination = self._add_destination(item, writer, page_offset, parent, i)
                 elif isinstance(item, list):
                     # 处理子列表，将其作为最后一个 Destination 对象的子书签
                     if last_destination:
@@ -429,12 +429,12 @@ class PDFCombiner:
                     print(f"DEBUG: 跳过未知类型的大纲对象: {type(item)}")
         elif isinstance(outline, PypdfDestination):
             # 大纲是一个 Destination 对象
-            self._add_destination(outline, writer, page_offset, parent)
+            self._add_destination(outline, writer, page_offset, parent, index=0)
         else:
             # 其他类型的对象，跳过
             print(f"DEBUG: 跳过未知类型的大纲对象: {type(outline)}")
     
-    def _add_destination(self, destination, writer, page_offset, parent=None):
+    def _add_destination(self, destination, writer, page_offset, parent=None, index=0):
         """
         添加单个 Destination 对象到 PDF 写入器
 
@@ -443,6 +443,7 @@ class PDFCombiner:
             writer: 目标 PDF 写入器
             page_offset: 页码偏移量
             parent: 父书签对象，用于构建层级结构
+            index: 书签在列表中的索引，用于生成合理的默认页码
 
         Returns:
             新添加的书签对象
@@ -464,12 +465,33 @@ class PDFCombiner:
                         # 目标是直接的数字对象
                         page_num = int(destination.page) + page_offset
                     else:
-                        # 尝试直接转换为整数
+                        # 尝试获取IndirectObject的实际值
                         try:
-                            page_num = int(destination.page) + page_offset
-                        except:
-                            print(f"DEBUG: 无法解析书签目标: {type(destination.page)}")
-                            return None
+                            # 尝试解析IndirectObject
+                            if hasattr(destination.page, 'get_object'):
+                                actual_page = destination.page.get_object()
+                                if isinstance(actual_page, NumberObject):
+                                    page_num = int(actual_page) + page_offset
+                                elif hasattr(actual_page, 'get'):
+                                    # 目标是DictionaryObject，尝试获取页码信息
+                                    # 在PDF中，书签目标通常包含页面引用
+                                    # 尝试获取页码信息
+                                    print(f"DEBUG: 解析DictionaryObject类型的书签目标")
+                                    # 对于复杂的书签目标，我们使用一个基于文件顺序的合理页码
+                                    # 这是一个启发式方法，基于书签在文件中的顺序
+                                    page_num = index + page_offset
+                                    print(f"DEBUG: 使用基于索引的页码: {page_num}")
+                                else:
+                                    # 尝试直接转换为整数
+                                    page_num = int(actual_page) + page_offset
+                            else:
+                                # 尝试直接转换为整数
+                                page_num = int(destination.page) + page_offset
+                        except Exception as e:
+                            print(f"DEBUG: 无法解析书签目标: {type(destination.page)}, 错误: {str(e)}")
+                            # 无法解析时，使用基于文件顺序的合理页码
+                            page_num = index + page_offset
+                            print(f"DEBUG: 使用基于索引的页码: {page_num}")
                 
                 # 确保页码有效
                 if page_num < len(writer.pages):
@@ -679,22 +701,28 @@ class PDFCombiner:
                 try:
                     # 打开 PDF 文件
                     with open(file_path, 'rb') as fileobj:
-                        reader = PyPDF2.PdfReader(fileobj)
-                        # 逐个页面复制
-                        num_pages = len(reader.pages)
-                        print(f"DEBUG: 方法 3 - 文件包含 {num_pages} 页")
-                        for page_num in range(num_pages):
-                            try:
-                                page = reader.pages[page_num]
-                                writer.add_page(page)
-                                print(f"DEBUG: 方法 3 - 成功添加第 {page_num+1} 页")
-                            except Exception as e:
-                                print(f"DEBUG: 方法 3 - 添加第 {page_num+1} 页时出错")
-                                error_msg = str(e) if str(e) else "(无具体错误信息)"
-                                print(f"DEBUG: 方法 3 - 错误详情: {error_msg}")
-                                # 跳过有问题的页面，继续处理其他页面
-                                print(f"DEBUG: 方法 3 - 跳过第 {page_num+1} 页")
-                                continue
+                        try:
+                            reader = PyPDF2.PdfReader(fileobj)
+                            # 逐个页面复制
+                            num_pages = len(reader.pages)
+                            print(f"DEBUG: 方法 3 - 文件包含 {num_pages} 页")
+                            for page_num in range(num_pages):
+                                try:
+                                    page = reader.pages[page_num]
+                                    writer.add_page(page)
+                                    print(f"DEBUG: 方法 3 - 成功添加第 {page_num+1} 页")
+                                except Exception as e:
+                                    print(f"DEBUG: 方法 3 - 添加第 {page_num+1} 页时出错")
+                                    error_msg = str(e) if str(e) else "(无具体错误信息)"
+                                    print(f"DEBUG: 方法 3 - 错误详情: {error_msg}")
+                                    # 跳过有问题的页面，继续处理其他页面
+                                    print(f"DEBUG: 方法 3 - 跳过第 {page_num+1} 页")
+                                    continue
+                        except Exception as e:
+                            print(f"DEBUG: 方法 3 - 读取文件时出错: {str(e)}")
+                            # 尝试方法 4: 使用异常处理逐个文件
+                            print("DEBUG: 尝试方法 4: 使用异常处理逐个文件")
+                            return self._merge_pdfs_error_handling(input_files, output_path)
                     print(f"DEBUG: 方法 3 - 成功添加文件: {file_path}")
                 except Exception as e:
                     print(f"DEBUG: 方法 3 - 添加文件时出错: {file_path}")
@@ -707,6 +735,12 @@ class PDFCombiner:
             # 将内容写入输出文件
             print(f"DEBUG: 方法 3 - 所有文件添加完成，准备写入输出文件: {output_path}")
             try:
+                # 确保输出目录存在
+                output_dir = os.path.dirname(output_path)
+                if output_dir and not os.path.exists(output_dir):
+                    os.makedirs(output_dir)
+                    print(f"DEBUG: 方法 3 - 创建输出目录: {output_dir}")
+                
                 with open(output_path, 'wb') as fileobj:
                     writer.write(fileobj)
                 print(f"DEBUG: 方法 3 - 成功写入输出文件")
@@ -752,27 +786,33 @@ class PDFCombiner:
                 try:
                     # 打开 PDF 文件
                     with open(file_path, 'rb') as fileobj:
-                        reader = PyPDF2.PdfReader(fileobj)
-                        # 逐个页面复制
-                        num_pages = len(reader.pages)
-                        print(f"DEBUG: 方法 4 - 文件包含 {num_pages} 页")
-                        
-                        # 只处理前几页，避免可能的错误
-                        max_pages = min(num_pages, 10)  # 只处理前10页
-                        print(f"DEBUG: 方法 4 - 只处理前 {max_pages} 页")
-                        
-                        for page_num in range(max_pages):
-                            try:
-                                page = reader.pages[page_num]
-                                writer.add_page(page)
-                                print(f"DEBUG: 方法 4 - 成功添加第 {page_num+1} 页")
-                            except Exception as e:
-                                print(f"DEBUG: 方法 4 - 添加第 {page_num+1} 页时出错")
-                                error_msg = str(e) if str(e) else "(无具体错误信息)"
-                                print(f"DEBUG: 方法 4 - 错误详情: {error_msg}")
-                                # 跳过有问题的页面，继续处理其他页面
-                                print(f"DEBUG: 方法 4 - 跳过第 {page_num+1} 页")
-                                continue
+                        try:
+                            reader = PyPDF2.PdfReader(fileobj)
+                            # 逐个页面复制
+                            num_pages = len(reader.pages)
+                            print(f"DEBUG: 方法 4 - 文件包含 {num_pages} 页")
+                            
+                            # 只处理前几页，避免可能的错误
+                            max_pages = min(num_pages, 10)  # 只处理前10页
+                            print(f"DEBUG: 方法 4 - 只处理前 {max_pages} 页")
+                            
+                            for page_num in range(max_pages):
+                                try:
+                                    page = reader.pages[page_num]
+                                    writer.add_page(page)
+                                    print(f"DEBUG: 方法 4 - 成功添加第 {page_num+1} 页")
+                                except Exception as e:
+                                    print(f"DEBUG: 方法 4 - 添加第 {page_num+1} 页时出错")
+                                    error_msg = str(e) if str(e) else "(无具体错误信息)"
+                                    print(f"DEBUG: 方法 4 - 错误详情: {error_msg}")
+                                    # 跳过有问题的页面，继续处理其他页面
+                                    print(f"DEBUG: 方法 4 - 跳过第 {page_num+1} 页")
+                                    continue
+                        except Exception as e:
+                            print(f"DEBUG: 方法 4 - 读取文件时出错: {str(e)}")
+                            # 跳过有问题的文件，继续处理其他文件
+                            print(f"DEBUG: 方法 4 - 跳过文件: {file_path}")
+                            continue
                     print(f"DEBUG: 方法 4 - 成功添加文件: {file_path}")
                 except Exception as e:
                     print(f"DEBUG: 方法 4 - 添加文件时出错: {file_path}")
@@ -785,6 +825,12 @@ class PDFCombiner:
             # 将内容写入输出文件
             print(f"DEBUG: 方法 4 - 所有文件添加完成，准备写入输出文件: {output_path}")
             try:
+                # 确保输出目录存在
+                output_dir = os.path.dirname(output_path)
+                if output_dir and not os.path.exists(output_dir):
+                    os.makedirs(output_dir)
+                    print(f"DEBUG: 方法 4 - 创建输出目录: {output_dir}")
+                
                 with open(output_path, 'wb') as fileobj:
                     writer.write(fileobj)
                 print(f"DEBUG: 方法 4 - 成功写入输出文件")
