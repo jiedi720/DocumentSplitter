@@ -190,7 +190,7 @@ DocuSplitter/
 │   ├── __init__.py
 │   ├── file_handler.py         # 通用文件处理
 │   ├── pdf_splitter.py         # PDF 分割逻辑
-│   ├── pdf_combine.py          # PDF 合并逻辑
+│   ├── pdf_merge.py            # PDF 合并逻辑
 │   ├── word_splitter.py        # Word 分割逻辑
 │   ├── txt_splitter.py         # TXT 分割逻辑
 │   ├── md_splitter.py          # Markdown 分割逻辑

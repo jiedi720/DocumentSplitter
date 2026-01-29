@@ -22,7 +22,7 @@ sys.path.append(str(project_root))
 
 from function.file_handler import FileHandler
 from function.pdf_splitter import PDFSplitter
-from function.pdf_combine import PDFCombiner
+from function.pdf_merge import PDFCombiner
 from function.word_splitter import WordSplitter
 from function.txt_splitter import TxtSplitter
 from function.md_splitter import MdSplitter
