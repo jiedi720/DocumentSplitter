@@ -31,11 +31,22 @@ class AnalysisResultWindow:
         self.window.title("文档信息汇总")
         self.window.geometry("550x400")
 
+        # 确保窗口显示在最前面
+        self.window.transient(parent)  # 设置为父窗口的临时窗口
+        self.window.grab_set()  # 获得焦点，用户必须先处理此窗口
+        self.window.attributes('-topmost', True)  # 始终显示在最前面
+        self.window.focus_force()  # 强制获得焦点
+
         # 绑定窗口关闭事件
         self.window.protocol("WM_DELETE_WINDOW", self.on_window_close)
 
         # 使窗口居中
         self.center_window()
+
+        # 取消 topmost 属性，避免影响其他窗口
+        def unset_topmost():
+            self.window.attributes('-topmost', False)
+        self.window.after(100, unset_topmost)
 
         # 创建界面组件
         self.create_widgets()
